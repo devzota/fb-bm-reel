@@ -263,6 +263,236 @@ export class ZTTeamFacebookService {
     }
   }
 
+  /**
+   * ZTTeam: Kết nối Token Doanh nghiệp (Meta Business System User Token)
+   * Tự động nhận diện Business ID, Business Name, App ID, App Name, System User Name
+   * và đồng bộ danh sách Fanpage với quyền vĩnh viễn (Never Expire).
+   */
+  async ztteam_connectBMToken(token: string, userId: string) {
+    if (!token || typeof token !== 'string') {
+      throw new BadRequestException('Vui lòng cung cấp mã Token Meta Business hợp lệ');
+    }
+    const cleanToken = token.trim();
+
+    try {
+      /** 1. Gọi debug_token để kiểm tra App ID, Type, Expiry */
+      let appId = '';
+      let accountType = 'SYSTEM_USER';
+      let tokenExpiry = 'NEVER';
+
+      try {
+        const debugRes = await firstValueFrom(
+          this.httpService.get(`https://graph.facebook.com/${this.API_VERSION}/debug_token`, {
+            params: { input_token: cleanToken, access_token: cleanToken }
+          })
+        );
+        const d = debugRes.data?.data;
+        if (d) {
+          appId = d.app_id ? String(d.app_id) : '';
+          accountType = d.type === 'SYSTEM_USER' ? 'SYSTEM_USER' : 'PERSONAL';
+          tokenExpiry = d.expires_at === 0 ? 'NEVER' : new Date(d.expires_at * 1000).toISOString();
+        }
+      } catch (dbgErr: any) {
+        this.logger.warn(`debug_token warning: ${dbgErr.message}`);
+      }
+
+      /** 2. Gọi GET /me để lấy System User ID và Tên */
+      const meRes = await firstValueFrom(
+        this.httpService.get(`https://graph.facebook.com/${this.API_VERSION}/me`, {
+          params: { access_token: cleanToken }
+        })
+      );
+      const fbUserId = String(meRes.data.id);
+      const fbUserName = meRes.data.name || 'System User';
+
+      /** 3. Gọi GET /me/accounts để lấy danh sách Fanpage và thông tin Business */
+      const accountsRes = await firstValueFrom(
+        this.httpService.get(`https://graph.facebook.com/${this.API_VERSION}/me/accounts`, {
+          params: {
+            access_token: cleanToken,
+            fields: 'id,name,picture.type(large),category,followers_count,fan_count,access_token,business,tasks',
+            limit: 100
+          }
+        })
+      );
+      const pages = Array.isArray(accountsRes.data?.data) ? accountsRes.data.data : [];
+
+      let businessId: string | null = null;
+      let businessName: string | null = null;
+
+      for (const p of pages) {
+        if (p.business && p.business.id) {
+          businessId = String(p.business.id);
+          businessName = p.business.name || 'Doanh Nghiệp Meta';
+          break;
+        }
+      }
+
+      /** 4. Tìm tên Meta App nếu có businessId và appId */
+      let appName = 'Meta App';
+      if (businessId && appId) {
+        try {
+          const ownedAppsRes = await firstValueFrom(
+            this.httpService.get(`https://graph.facebook.com/${this.API_VERSION}/${businessId}/owned_apps`, {
+              params: { access_token: cleanToken }
+            })
+          );
+          const ownedApps = ownedAppsRes.data?.data || [];
+          const foundApp = ownedApps.find((a: any) => String(a.id) === String(appId));
+          if (foundApp && foundApp.name) {
+            appName = foundApp.name;
+          }
+        } catch (appErr: any) {
+          this.logger.warn(`Lỗi lấy owned_apps: ${appErr.message}`);
+        }
+      }
+
+      /** 5. Lưu hoặc cập nhật vào ztteam_fb_accounts */
+      let fbAccount = await this.prisma.ztteam_fb_accounts.findFirst({
+        where: {
+          owner_user_id: userId,
+          fb_user_id: fbUserId,
+          ...(appId ? { app_id: appId } : {})
+        }
+      });
+
+      const accountData: any = {
+        name: fbUserName,
+        account_type: accountType,
+        business_id: businessId,
+        business_name: businessName,
+        app_id: appId,
+        app_name: appName,
+        token_expiry: tokenExpiry,
+        user_token_encrypted: cleanToken,
+        status: 'active'
+      };
+
+      if (fbAccount) {
+        fbAccount = await this.prisma.ztteam_fb_accounts.update({
+          where: { id: fbAccount.id },
+          data: accountData
+        });
+      } else {
+        fbAccount = await this.prisma.ztteam_fb_accounts.create({
+          data: {
+            ...accountData,
+            fb_user_id: fbUserId,
+            owner_user_id: userId
+          }
+        });
+      }
+
+      /** 6. Đồng bộ các Fanpage được cấp quyền cho System User */
+      for (const page of pages) {
+        const pageData: any = {
+          name: page.name,
+          category: page.category || null,
+          page_token_encrypted: page.access_token || cleanToken,
+          token_status: 'active',
+          avatar: page.id ? `https://graph.facebook.com/${page.id}/picture?type=large` : null,
+          follower_count: Math.max(Number(page.followers_count) || 0, Number(page.fan_count) || 0)
+        };
+
+        const existingPage = await this.prisma.ztteam_pages.findFirst({
+          where: { fb_page_id: page.id },
+          include: { fb_account: true }
+        });
+
+        if (existingPage) {
+          if (existingPage.fb_account_id === fbAccount.id) {
+            await this.prisma.ztteam_pages.update({
+              where: { id: existingPage.id },
+              data: pageData
+            });
+          } else if (existingPage.fb_account?.owner_user_id === userId) {
+            await this.prisma.ztteam_pages.update({
+              where: { id: existingPage.id },
+              data: { ...pageData, fb_account_id: fbAccount.id }
+            });
+          }
+        } else {
+          await this.prisma.ztteam_pages.create({
+            data: {
+              ...pageData,
+              fb_page_id: page.id,
+              fb_account_id: fbAccount.id
+            }
+          });
+        }
+      }
+
+      return {
+        success: true,
+        message: `Đã kết nối thành công Doanh Nghiệp "${businessName || 'Meta BM'}" (App: ${appName}) với ${pages.length} Fanpage!`,
+        business: {
+          id: businessId,
+          name: businessName,
+          appId,
+          appName,
+          systemUserName: fbUserName,
+          systemUserId: fbUserId,
+          tokenExpiry,
+          pagesCount: pages.length
+        }
+      };
+    } catch (error: any) {
+      this.logger.error('Error connecting BM Token', error.response?.data || error);
+      throw new BadRequestException(error.response?.data?.error?.message || error.message || 'Lỗi kết nối Meta Business Token');
+    }
+  }
+
+  /**
+   * ZTTeam: Lấy danh sách Doanh Nghiệp (BM) kèm cấu trúc tài sản (Apps, System Users, Pages)
+   */
+  async ztteam_getBusinessesWithAssets(userId: string) {
+    const fbAccounts = await this.prisma.ztteam_fb_accounts.findMany({
+      where: { owner_user_id: userId },
+      include: {
+        pages: {
+          select: {
+            id: true,
+            fb_page_id: true,
+            name: true,
+            avatar: true,
+            category: true,
+            follower_count: true,
+            is_active: true,
+            token_status: true,
+            last_checked: true
+          },
+          orderBy: { name: 'asc' }
+        }
+      },
+      orderBy: { created_at: 'desc' }
+    });
+
+    return fbAccounts.map(acc => ({
+      id: acc.id,
+      fbUserId: acc.fb_user_id,
+      name: acc.name,
+      accountType: acc.account_type || 'SYSTEM_USER',
+      businessId: acc.business_id,
+      businessName: acc.business_name || (acc.account_type === 'PERSONAL' ? 'Tài Khoản Cá Nhân' : 'Doanh Nghiệp BM'),
+      appId: acc.app_id,
+      appName: acc.app_name || 'Meta App',
+      tokenExpiry: acc.token_expiry || 'NEVER',
+      status: acc.status,
+      pagesCount: acc.pages.length,
+      pages: acc.pages.map(p => ({
+        id: p.fb_page_id,
+        internalId: p.id,
+        name: p.name,
+        avatar: p.avatar,
+        category: p.category,
+        followersCount: p.follower_count,
+        isActive: p.is_active,
+        status: p.token_status,
+        lastChecked: p.last_checked
+      }))
+    }));
+  }
+
   private async ztteam_computePageTimesAndNextVideo(page: any) {
     let lastRenderTime = page.last_auto_scan_at ? page.last_auto_scan_at : null;
     let nextRenderTime = null;
@@ -402,6 +632,12 @@ export class ZTTeamFacebookService {
         followersCount: p.follower_count,
         avatar: p.avatar,
         ownerName: p.fb_account.name,
+        accountType: p.fb_account.account_type || 'SYSTEM_USER',
+        businessId: p.fb_account.business_id,
+        businessName: p.fb_account.business_name || (p.fb_account.account_type === 'PERSONAL' ? 'Tài Khoản Cá Nhân' : 'Doanh Nghiệp BM'),
+        appId: p.fb_account.app_id,
+        appName: p.fb_account.app_name || 'Meta App',
+        tokenExpiry: p.fb_account.token_expiry || 'NEVER',
         status: p.token_status,
         isActive: p.is_active,
         tags: p.tags,

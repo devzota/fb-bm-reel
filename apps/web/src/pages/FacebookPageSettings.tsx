@@ -411,7 +411,19 @@ export default function FacebookPageSettings() {
                 </a>
               )}
             </h3>
-            <p className="text-xs text-fb-text-muted mt-1">ID: {fbPageId}</p>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <span className="text-xs text-fb-text-muted">ID: {fbPageId}</span>
+              {pages.find(p => p.id === id || p.internalId === id)?.businessName && (
+                <span 
+                  onClick={() => navigate('/facebook/business-hub')}
+                  className="cursor-pointer px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center gap-1 hover:bg-blue-500/25 transition-colors"
+                  title="Bấm để xem chi tiết Doanh Nghiệp trong Hub"
+                >
+                  <span className="material-symbols-outlined text-xs">domain</span>
+                  <span>Thuộc BM: {pages.find(p => p.id === id || p.internalId === id)?.businessName}</span>
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

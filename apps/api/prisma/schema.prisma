@@ -44,6 +44,12 @@ model ztteam_fb_accounts {
   id                    String   @id @default(uuid())
   fb_user_id            String
   name                  String
+  account_type          String   @default("SYSTEM_USER")
+  business_id           String?
+  business_name         String?
+  app_id                String?
+  app_name              String?
+  token_expiry          String   @default("NEVER")
   user_token_encrypted  String
   status                String   @default("active")
   owner_user_id         String

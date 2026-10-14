@@ -94,7 +94,7 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
   /** ZTTeam: Định dạng nhãn hiển thị định dạng đăng */
   const postFormatLabel =
     page.postFormat === 'reel' ? 'Video Reel' :
-    page.postFormat === 'mixed' ? 'Ảnh 2K & Reel' : 'Bài viết Ảnh 2K';
+      page.postFormat === 'mixed' ? 'Ảnh 2K & Reel' : 'Bài viết Ảnh 2K';
 
   /** ZTTeam: Định dạng nhãn hiển thị lịch đăng */
   const scheduleLabel =
@@ -154,6 +154,33 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
               </span>
               <span className="hidden sm:inline">•</span>
               <span className="text-fb-text-muted text-[10px] sm:text-[11px] truncate block">ID: {page.id}</span>
+            </div>
+
+            {/** Badges phân loại Doanh Nghiệp (BM), Meta App & Thời hạn Token */}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              <span
+                onClick={(e) => { e.stopPropagation(); navigate('/facebook/business-hub'); }}
+                className="cursor-pointer px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 flex items-center gap-1 transition-colors"
+                title="Bấm để mở Hub Quản Lý Doanh Nghiệp"
+              >
+                <span className="material-symbols-outlined text-[12px]">corporate_fare</span>
+                <span className="truncate max-w-[120px]">{page.businessName || 'Doanh Nghiệp BM'}</span>
+              </span>
+
+              {page.appName && (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">apps</span>
+                  <span className="truncate max-w-[100px]">{page.appName}</span>
+                </span>
+              )}
+
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 ${(page.tokenExpiry === 'NEVER' || page.accountType === 'SYSTEM_USER')
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  : 'bg-slate-700/50 text-slate-300 border-slate-600/40'
+                }`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>{(page.tokenExpiry === 'NEVER' || page.accountType === 'SYSTEM_USER') ? 'Vĩnh Viễn' : 'Token'}</span>
+              </span>
             </div>
           </div>
         </div>
@@ -415,8 +442,8 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
           <button
             onClick={handleToggleActiveClick}
             className={`w-8 h-8 flex items-center justify-center rounded-full transition-all shadow-sm ${isCurrentlyActive
-                ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500 hover:text-white'
-                : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500 hover:text-white'
+              ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500 hover:text-white'
+              : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500 hover:text-white'
               }`}
             title={isCurrentlyActive ? 'Tắt Fanpage' : 'Bật lại Fanpage'}
           >
@@ -461,14 +488,17 @@ export default function FacebookPages() {
 
   /** Lọc dữ liệu */
   const [filterOwner, setFilterOwner] = useState('');
+  const [filterBusiness, setFilterBusiness] = useState('');
   const [filterTag, setFilterTag] = useState('');
 
   const uniqueOwners = Array.from(new Set(pages.map(p => p.ownerName).filter(Boolean)));
+  const uniqueBusinesses = Array.from(new Set(pages.map(p => p.businessName).filter(Boolean)));
   const uniqueTags = Array.from(new Set(pages.flatMap(p => p.tags || [])));
 
   const filteredPages = pages.filter(p => {
     let match = true;
     if (filterOwner && p.ownerName !== filterOwner) match = false;
+    if (filterBusiness && p.businessName !== filterBusiness) match = false;
     if (filterTag && (!p.tags || !p.tags.includes(filterTag))) match = false;
     return match;
   });
@@ -491,6 +521,7 @@ export default function FacebookPages() {
   }, []);
 
   useEffect(() => {
+    ztteam_fetchPagesFromDB();
     ztteam_fetchAccounts();
   }, []);
 
@@ -585,6 +616,15 @@ export default function FacebookPages() {
             >
               <span className={`material-symbols-outlined text-base text-emerald-400 ${isCheckingHealth ? 'animate-spin' : ''}`}>health_and_safety</span>
               <span className="truncate">Quét Lỗi Token</span>
+            </button>
+
+            <button
+              onClick={() => navigate('/facebook/business-hub')}
+              className="px-3.5 py-2 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 rounded-full text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-colors border border-blue-500/30 col-span-2 sm:col-span-1"
+              title="Mở Quản Lý Doanh Nghiệp (BM) & Token Vĩnh Viễn"
+            >
+              <span className="material-symbols-outlined text-base">domain</span>
+              <span className="truncate">Quản Lý BM &amp; App</span>
             </button>
           </div>
 
@@ -722,8 +762,8 @@ export default function FacebookPages() {
             <button
               onClick={() => setPageTab('active')}
               className={`flex-1 sm:flex-initial px-3.5 sm:px-4 py-1.5 rounded-full text-xs text-center transition-colors ${pageTab === 'active'
-                  ? 'bg-gradient-to-r from-fb-blue to-cyan-500 text-white font-bold shadow-md shadow-blue-500/20'
-                  : 'font-semibold text-fb-text-muted hover:text-fb-text hover:bg-white/5'
+                ? 'bg-gradient-to-r from-fb-blue to-cyan-500 text-white font-bold shadow-md shadow-blue-500/20'
+                : 'font-semibold text-fb-text-muted hover:text-fb-text hover:bg-white/5'
                 }`}
             >
               Đang Hoạt Động ({activePages.length})
@@ -731,15 +771,26 @@ export default function FacebookPages() {
             <button
               onClick={() => setPageTab('deactivated')}
               className={`flex-1 sm:flex-initial px-3.5 sm:px-4 py-1.5 rounded-full text-xs text-center transition-colors ${pageTab === 'deactivated'
-                  ? 'bg-amber-500/20 text-amber-400 font-bold shadow-md'
-                  : 'font-semibold text-fb-text-muted hover:text-fb-text hover:bg-white/5'
+                ? 'bg-amber-500/20 text-amber-400 font-bold shadow-md'
+                : 'font-semibold text-fb-text-muted hover:text-fb-text hover:bg-white/5'
                 }`}
             >
               Đã Tắt ({deactivatedPages.length})
             </button>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+            {uniqueBusinesses.length > 0 && (
+              <CustomDropdown
+                value={filterBusiness}
+                onChange={(val) => setFilterBusiness(val)}
+                options={[
+                  { value: '', label: 'Tất cả Doanh Nghiệp (BM)' },
+                  ...uniqueBusinesses.map((bName: any) => ({ value: bName, label: bName }))
+                ]}
+                className="flex-1 sm:w-48"
+              />
+            )}
             {uniqueOwners.length > 0 && (
               <CustomDropdown
                 value={filterOwner}
@@ -748,10 +799,10 @@ export default function FacebookPages() {
                   { value: '', label: 'Tất cả Nick' },
                   ...uniqueOwners.map((owner: any) => ({ value: owner, label: owner }))
                 ]}
-                className="flex-1 sm:w-44"
+                className="flex-1 sm:w-40"
               />
             )}
-            <button onClick={ztteam_fetchPages} disabled={isLoading} className="px-3 py-2 rounded-full bg-fb-surface-hover text-fb-text-muted hover:text-fb-text text-xs font-medium flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors shrink-0">
+            <button onClick={() => ztteam_fetchPagesFromDB()} disabled={isLoading} className="px-3 py-2 rounded-full bg-fb-surface-hover text-fb-text-muted hover:text-fb-text text-xs font-medium flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors shrink-0">
               <span className={`material-symbols-outlined text-base shrink-0 ${isLoading ? 'animate-spin' : ''}`}>refresh</span>
             </button>
           </div>

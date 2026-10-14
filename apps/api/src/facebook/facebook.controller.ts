@@ -13,6 +13,16 @@ export class ZTTeamFacebookController {
     return this.facebookService.ztteam_exchangeLongLivedToken(body.shortToken, req.user.sub);
   }
 
+  @Post('connect-bm-token')
+  ztteam_connectBMToken(@Body() body: { token: string }, @Request() req: any) {
+    return this.facebookService.ztteam_connectBMToken(body.token, req.user.sub);
+  }
+
+  @Get('businesses')
+  ztteam_getBusinesses(@Request() req: any) {
+    return this.facebookService.ztteam_getBusinessesWithAssets(req.user.sub);
+  }
+
   @Post('pages/:fbAccountId/fetch')
   ztteam_fetchPages(@Param('fbAccountId') fbAccountId: string, @Request() req: any) {
     return this.facebookService.ztteam_fetchPages(fbAccountId, req.user.sub);

@@ -35,6 +35,12 @@ export interface ZTTeamFanpage {
   addLinkToCaption?: boolean;
   addLinkToComment?: boolean;
   internalId?: string;
+  accountType?: string;
+  businessId?: string | null;
+  businessName?: string | null;
+  appId?: string | null;
+  appName?: string | null;
+  tokenExpiry?: string | null;
 }
 
 interface ZTTeamFacebookState {
@@ -42,12 +48,15 @@ interface ZTTeamFacebookState {
   fbAccountId: string | null;
   pages: ZTTeamFanpage[];
   accounts: any[];
+  businesses: any[];
   isLoading: boolean;
   error: string | null;
 
   ztteam_checkLoginStatus: () => Promise<void>;
   ztteam_fetchPagesFromDB: () => Promise<void>;
   ztteam_fetchAccounts: () => Promise<void>;
+  ztteam_fetchBusinesses: () => Promise<void>;
+  ztteam_connectBMToken: (token: string) => Promise<any>;
   ztteam_loginWithFacebook: () => Promise<void>;
   ztteam_fetchPages: () => Promise<void>;
   ztteam_testPost: (pageId: string, message: string) => Promise<void>;
@@ -69,6 +78,7 @@ export const useZTTeamFacebookStore = create<ZTTeamFacebookState>((set, get) => 
   fbAccountId: null,
   pages: [],
   accounts: [],
+  businesses: [],
   isLoading: false,
   error: null,
 
@@ -230,6 +240,30 @@ export const useZTTeamFacebookStore = create<ZTTeamFacebookState>((set, get) => 
       set({ accounts: response.data || [] });
     } catch (error: any) {
       console.error('Error fetching fb accounts', error);
+    }
+  },
+
+  ztteam_fetchBusinesses: async () => {
+    try {
+      const response = await api.get('/facebook/businesses');
+      set({ businesses: response.data || [] });
+    } catch (error: any) {
+      console.error('Error fetching businesses', error);
+    }
+  },
+
+  ztteam_connectBMToken: async (token: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await api.post('/facebook/connect-bm-token', { token });
+      await get().ztteam_fetchPagesFromDB();
+      await get().ztteam_fetchBusinesses();
+      set({ isLoading: false });
+      return response.data;
+    } catch (error: any) {
+      const msg = error.response?.data?.message || error.message || 'Lỗi kết nối Token BM';
+      set({ error: msg, isLoading: false });
+      throw new Error(msg);
     }
   },
 
