@@ -201,7 +201,7 @@ export class ZTTeamHookVideoService {
       width: 1080px;
       height: 1920px;
       background: transparent;
-      font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Montserrat', sans-serif !important;
       color: #ffffff;
       overflow: hidden;
       position: relative;
