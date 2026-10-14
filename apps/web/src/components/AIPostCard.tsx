@@ -281,31 +281,31 @@ export default function ZTTeamAIPostCard({
       <div className="px-4 py-1">
         <div className="w-full aspect-[4/5] bg-black/60 rounded-xl relative overflow-hidden group/media border border-white/5">
           {/** Badges Top Bar */}
-          <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none">
+          <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none gap-1">
             {item.template_id === 'source_original' ? (
-              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/80 backdrop-blur-md border border-amber-400/30 text-[10px] font-bold text-white shadow-md" title="Đang sử dụng ảnh gốc của bài viết nguồn làm dự phòng">
-                <span className="material-symbols-outlined text-xs">image</span>
-                ẢNH GỐC DỰ PHÒNG
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/85 backdrop-blur-md border border-amber-400/40 text-[10px] font-bold text-white shadow-md shrink-0" title="Đang sử dụng ảnh gốc của bài viết nguồn">
+                <span className="material-symbols-outlined text-[13px]">image</span>
+                ẢNH GỐC
               </div>
             ) : (
-              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-[10px] font-bold text-cyan-300 shadow-md">
-                <span className="material-symbols-outlined text-xs">auto_awesome</span>
-                ẢNH 2K AI
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/75 backdrop-blur-md border border-white/20 text-[10px] font-bold text-cyan-300 shadow-md shrink-0">
+                <span className="material-symbols-outlined text-[13px]">auto_awesome</span>
+                ẢNH 2K
               </div>
             )}
 
             {item.video_url ? (
-              <div className="flex items-center gap-1.5 pointer-events-auto">
+              <div className="flex items-center gap-1 pointer-events-auto shrink-0">
                 {/** Nhãn phân biệt loại video: Video từ ảnh vs Video Muse */}
                 {item.video_engine === 'hook_image' || item.video_url.includes('hook_reel_') || (!item.video_engine && !item.video_url.includes('muse_reel_')) ? (
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-500/25 text-amber-300 border border-amber-500/40 backdrop-blur-md flex items-center gap-1 shadow-md" title="Video Reel 10s tạo từ hình ảnh và kịch bản Hook sắc nét">
-                    <span className="material-symbols-outlined text-[13px]">smart_display</span>
-                    VIDEO TỪ ẢNH
+                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-amber-500/25 text-amber-300 border border-amber-500/40 backdrop-blur-md flex items-center gap-0.5 shadow-md" title="Video Reel 10s tạo từ hình ảnh và kịch bản Hook sắc nét">
+                    <span className="material-symbols-outlined text-[12px]">smart_display</span>
+                    REEL
                   </span>
                 ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 backdrop-blur-md flex items-center gap-1 shadow-md" title="Video Reel tạo bằng chuyển động Muse AI">
-                    <span className="material-symbols-outlined text-[13px]">motion_photos_on</span>
-                    VIDEO MUSE
+                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 backdrop-blur-md flex items-center gap-0.5 shadow-md" title="Video Reel tạo bằng chuyển động Muse AI">
+                    <span className="material-symbols-outlined text-[12px]">motion_photos_on</span>
+                    MUSE
                   </span>
                 )}
 
@@ -315,17 +315,17 @@ export default function ZTTeamAIPostCard({
                     e.stopPropagation();
                     setShowVideo(!showVideo);
                   }}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all shadow-md cursor-pointer ${
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all shadow-md cursor-pointer ${
                     showVideo
                       ? 'bg-amber-400 text-black shadow-amber-400/20'
-                      : 'bg-black/70 backdrop-blur-md border border-amber-400/40 text-amber-300 hover:bg-black/90'
+                      : 'bg-black/75 backdrop-blur-md border border-amber-400/40 text-amber-300 hover:bg-black/90'
                   }`}
                   title="Bấm để chuyển đổi giữa Ảnh và Video Reel"
                 >
-                  <span className="material-symbols-outlined text-xs">
+                  <span className="material-symbols-outlined text-[12px]">
                     {showVideo ? 'photo' : 'movie'}
                   </span>
-                  <span>{showVideo ? 'XEM ẢNH' : 'PHÁT VIDEO'}</span>
+                  <span>{showVideo ? 'ẢNH' : 'VIDEO'}</span>
                 </button>
 
                 <a
@@ -334,10 +334,10 @@ export default function ZTTeamAIPostCard({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="flex items-center justify-center w-6 h-6 rounded-full bg-black/70 hover:bg-black/90 backdrop-blur-md border border-amber-400/40 text-amber-300 hover:text-white transition-all shadow-md cursor-pointer"
+                  className="flex items-center justify-center w-5.5 h-5.5 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-amber-400/40 text-amber-300 hover:text-white transition-all shadow-md cursor-pointer shrink-0"
                   title="Tải Video Reel (MP4) về máy"
                 >
-                  <span className="material-symbols-outlined text-xs">download</span>
+                  <span className="material-symbols-outlined text-[12px]">download</span>
                 </a>
               </div>
             ) : item.video_status === 'PENDING' ? (
