@@ -233,13 +233,16 @@ export class ZTTeamRenderProcessor implements OnModuleInit {
         }
       }
 
-      this.telegramService.ztteam_sendMessage(
-        `🚨 *[LỖI TẠO VIDEO AI]*\n\n` +
-        `👤 *Thành viên:* ${memberEmail}\n` +
-        `🚩 *Fanpage:* ${pageName}\n` +
-        `🎬 *Video:* ${reelRecord?.wp_post_title || 'Không rõ'}\n` +
-        `❌ *Chi tiết lỗi:* ${error.message}`
-      );
+      const alertMsg = this.telegramService.ztteam_formatAlert({
+        systemName: 'Render Video AI Muse (Remotion)',
+        fanpageName: pageName,
+        postTitle: reelRecord?.wp_post_title || 'Video Reel',
+        step: 'Render video đa khung hình bằng AI Muse / Remotion engine',
+        rawError: error.message,
+        nextAction: 'Đã cập nhật trạng thái FAILED. Hệ thống sẽ tiếp tục xử lý các video khác.',
+        memberEmail,
+      });
+      this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
 
       throw error;
     }

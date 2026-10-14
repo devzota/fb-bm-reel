@@ -37,6 +37,12 @@ export default function FacebookPageSettings() {
 
   /** Publishing & Schedule Config State */
   const [postFormat, setPostFormat] = useState('image');
+  const [videoEngine, setVideoEngine] = useState('hook_image');
+  const [defaultBgm, setDefaultBgm] = useState<string>('');
+  const [bgmList, setBgmList] = useState<any[]>([]);
+  const [currentPlayingBgm, setCurrentPlayingBgm] = useState<string | null>(null);
+  const [bgmAudio, setBgmAudio] = useState<HTMLAudioElement | null>(null);
+  const [isUploadingBgm, setIsUploadingBgm] = useState(false);
   const [autoPublishEnabled, setAutoPublishEnabled] = useState(true);
   const [addLinkToCaption, setAddLinkToCaption] = useState(false);
   const [addLinkToComment, setAddLinkToComment] = useState(false);
@@ -96,7 +102,70 @@ export default function FacebookPageSettings() {
     if (pages.length === 0) {
       ztteam_fetchPagesFromDB();
     }
+    ztteam_loadBgmList();
   }, [id]);
+
+  /** Tải danh sách file nhạc BGM */
+  const ztteam_loadBgmList = async () => {
+    try {
+      const res = await api.get('media/bgm');
+      if (res.data?.success && Array.isArray(res.data?.data)) {
+        setBgmList(res.data.data);
+      }
+    } catch (e) {
+      /** Bỏ qua nếu lỗi */
+    }
+  };
+
+  /** Nghe thử / Dừng phát bài hát */
+  const ztteam_togglePlayBgm = (url: string, filename: string) => {
+    if (currentPlayingBgm === filename && bgmAudio) {
+      bgmAudio.pause();
+      setCurrentPlayingBgm(null);
+      setBgmAudio(null);
+      return;
+    }
+
+    if (bgmAudio) {
+      bgmAudio.pause();
+    }
+
+    const audio = new Audio(url);
+    audio.play();
+    audio.onended = () => {
+      setCurrentPlayingBgm(null);
+      setBgmAudio(null);
+    };
+    setBgmAudio(audio);
+    setCurrentPlayingBgm(filename);
+  };
+
+  /** Tải file âm thanh mới nhanh */
+  const ztteam_uploadQuickBgm = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploadingBgm(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post('media/bgm/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (res.data?.success) {
+        ztteam_showToast('Tải bài nhạc mới lên thành công!', 'success');
+        await ztteam_loadBgmList();
+        if (res.data.data?.filename) {
+          setDefaultBgm(res.data.data.filename);
+        }
+      }
+    } catch (err: any) {
+      ztteam_showToast(err.response?.data?.message || 'Lỗi tải file âm thanh', 'error');
+    } finally {
+      setIsUploadingBgm(false);
+      e.target.value = '';
+    }
+  };
 
   /** Load Queue on Tab 2 (Hàng Đợi) or Tab 3 (Lịch Sử) */
   useEffect(() => {
@@ -161,6 +230,8 @@ export default function FacebookPageSettings() {
       setPageAvatar(data.avatar || null);
       setTags(data.tags || []);
       setPostFormat(data.post_format || 'image');
+      setVideoEngine(data.video_engine || 'hook_image');
+      setDefaultBgm(data.default_bgm || '');
       setAutoPublishEnabled(data.auto_publish_enabled !== undefined ? data.auto_publish_enabled : true);
       setAddLinkToCaption(data.add_link_to_caption || false);
       setAddLinkToComment(data.add_link_to_comment || false);
@@ -236,6 +307,8 @@ export default function FacebookPageSettings() {
       await api.put(`facebook/pages/${id}/settings`, {
         tags,
         post_format: postFormat,
+        video_engine: videoEngine,
+        default_bgm: defaultBgm || null,
         auto_publish_enabled: autoPublishEnabled,
         add_link_to_caption: false,
         add_link_to_comment: false,
@@ -559,10 +632,101 @@ export default function FacebookPageSettings() {
                 />
                 <p className="text-[11px] text-fb-text-muted mt-2">
                   {postFormat === 'image' && 'Chuẩn định dạng: Tiêu đề VIẾT HOA + Hook Part 1 kịch tính + Ảnh AI 2K tỉ lệ 4:5 chân thực, sắc nét.'}
-                  {postFormat === 'reel' && 'Tạo video ngắn Reel 9:16 có giọng đọc AI sub voice và đăng lên Reels tab.'}
+                  {postFormat === 'reel' && 'Tạo video ngắn Reel 9:16 sắc nét kèm âm nhạc và đăng lên Reels tab.'}
                   {postFormat === 'mixed' && 'Tự động luân phiên giữa bài viết ảnh 2K và video Reel theo lịch đăng.'}
                 </p>
               </div>
+
+              {/** Tùy chọn Công nghệ Video Reel & Nhạc nền BGM (Hiển thị khi đăng Reel hoặc Xen kẽ) */}
+              {(postFormat === 'reel' || postFormat === 'mixed') && (
+                <div className="bg-fb-surface-hover/30 p-4 rounded-2xl border border-amber-500/20 space-y-4 animate-in fade-in duration-200">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-bold text-amber-400 uppercase tracking-wide flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px]">movie_filter</span>
+                        Công nghệ tạo Video Reel
+                      </label>
+                      <span className="text-[10px] text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                        Chuẩn Sắc Nét 2K
+                      </span>
+                    </div>
+                    <CustomDropdown
+                      value={videoEngine}
+                      onChange={setVideoEngine}
+                      options={[
+                        { value: 'hook_image', label: 'Tạo từ Ảnh Hook & Âm Nhạc (Sắc nét 1080x1920 10s - Mặc định)' },
+                        { value: 'muse', label: 'Tạo bằng Motion AI (Muse Motion Reel)' }
+                      ]}
+                    />
+                    <p className="text-[11px] text-fb-text-muted mt-1.5 leading-relaxed">
+                      {videoEngine === 'hook_image' 
+                        ? 'Tự động sử dụng ảnh 2K kết hợp kịch bản Hook 3 đoạn kịch tính do AI tạo bám sát bài viết gốc, font Montserrat và hòa âm nhạc nền 10s cực nét.'
+                        : 'Đưa bài viết vào hàng đợi để Worker ngoài xử lý chuyển động bằng Muse Motion AI.'
+                      }
+                    </p>
+                  </div>
+
+                  {/** Nhạc nền Reel (BGM) */}
+                  <div className="pt-2 border-t border-fb-surface-hover/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-bold text-fb-text uppercase tracking-wide flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px] text-cyan-400">library_music</span>
+                        Nhạc Nền Video Reel (BGM)
+                      </label>
+                      <label className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 cursor-pointer flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[15px]">{isUploadingBgm ? 'sync' : 'upload_file'}</span>
+                        <span>{isUploadingBgm ? 'Đang tải...' : '+ Tải nhạc mới'}</span>
+                        <input
+                          type="file"
+                          accept="audio/mp3,audio/wav,audio/m4a,audio/aac"
+                          className="hidden"
+                          onChange={ztteam_uploadQuickBgm}
+                          disabled={isUploadingBgm}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <CustomDropdown
+                          value={defaultBgm}
+                          onChange={setDefaultBgm}
+                          options={[
+                            { value: '', label: '🎵 Ngẫu nhiên từ Thư Viện Âm Thanh (Khuyên dùng)' },
+                            ...bgmList.map(b => ({
+                              value: b.filename,
+                              label: `🎵 ${b.name} (${b.size_formatted})`
+                            }))
+                          ]}
+                        />
+                      </div>
+
+                      {defaultBgm && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const found = bgmList.find(b => b.filename === defaultBgm);
+                            if (found) ztteam_togglePlayBgm(found.url, found.filename);
+                          }}
+                          className={`p-2.5 rounded-xl border transition-all shrink-0 flex items-center justify-center ${
+                            currentPlayingBgm === defaultBgm
+                              ? 'bg-amber-400 text-black border-amber-400 shadow-md shadow-amber-400/20'
+                              : 'bg-fb-surface-hover hover:bg-fb-surface-hover/80 text-fb-text border-white/5'
+                          }`}
+                          title={currentPlayingBgm === defaultBgm ? 'Dừng nghe thử' : 'Nghe thử bản nhạc này'}
+                        >
+                          <span className="material-symbols-outlined text-[18px]">
+                            {currentPlayingBgm === defaultBgm ? 'pause' : 'play_arrow'}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-fb-text-muted mt-1.5">
+                      Bản nhạc được chọn sẽ tự động phối âm vào Video Hook 10s với hiệu ứng fade-in mở đầu và fade-out kết thúc chuẩn điện ảnh.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/** Cơ chế điều hướng Link & Tương tác thông minh 2 bước */}
               <div className="pt-2">

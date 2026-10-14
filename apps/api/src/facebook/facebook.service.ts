@@ -694,6 +694,8 @@ export class ZTTeamFacebookService {
       avatar: page.avatar,
       tags: page.tags,
       post_format: page.post_format,
+      video_engine: (page as any).video_engine || 'hook_image',
+      default_bgm: (page as any).default_bgm || null,
       auto_publish_enabled: page.auto_publish_enabled,
       add_link_to_caption: page.add_link_to_caption,
       add_link_to_comment: page.add_link_to_comment,
@@ -780,6 +782,8 @@ export class ZTTeamFacebookService {
       data: {
         tags: config.tags,
         post_format: config.post_format,
+        video_engine: config.video_engine || 'hook_image',
+        default_bgm: config.default_bgm !== undefined ? config.default_bgm : null,
         auto_publish_enabled: config.auto_publish_enabled !== undefined ? config.auto_publish_enabled : true,
         add_link_to_caption: config.add_link_to_caption,
         add_link_to_comment: config.add_link_to_comment,
@@ -1681,8 +1685,14 @@ export class ZTTeamFacebookService {
           sentAccountAlerts.add(alertKey);
 
           const affectedPages = activePages.map(p => p.name).join(', ');
-          const warnMsg = `🚨 *[CẢNH BÁO NICK FACEBOOK BỊ LỖI TOKEN]*\n\n👤 *Nick quản lý*: ${acc.name}\n🚩 *Các Fanpage bị ảnh hưởng*: ${affectedPages}\n❌ *Chi tiết lỗi*: ${accErrorMsg}\n\n⚠️ *Hành động*: Vui lòng kết nối lại tài khoản Facebook trên giao diện Web để lấy Token mới!`;
-          
+          const warnMsg = this.telegramService.ztteam_formatAlert({
+            systemName: 'Giám Sát Token Facebook (Graph API)',
+            fanpageName: affectedPages,
+            step: 'Kiểm tra tính hợp lệ của User Token Facebook',
+            rawError: accErrorMsg,
+            nextAction: 'Vui lòng đăng nhập lại tài khoản Facebook trên giao diện Web để cấp lại Token mới!',
+            memberEmail: acc.name,
+          });
           await this.telegramService.ztteam_sendMessage(warnMsg);
         }
 
@@ -1774,7 +1784,14 @@ export class ZTTeamFacebookService {
         });
 
         if (!isPageValid) {
-          const warnMsg = `🚨 *[CẢNH BÁO TOKEN FANPAGE BỊ HẾT HẠN]*\n\n👤 *Nick quản lý*: ${acc.name}\n🚩 *Fanpage*: ${p.name}\n❌ *Chi tiết*: ${pageErrorMsg}\n\n⚠️ Vui lòng kết nối lại tài khoản Facebook để lấy Token mới cho Fanpage!`;
+          const warnMsg = this.telegramService.ztteam_formatAlert({
+            systemName: 'Giám Sát Token Fanpage',
+            fanpageName: p.name,
+            step: 'Kiểm tra Page Access Token qua Graph API',
+            rawError: pageErrorMsg || 'Token Fanpage hết hạn hoặc bị thu hồi quyền',
+            nextAction: 'Vui lòng kết nối lại tài khoản Facebook trên Web để cấp mới Token cho Fanpage!',
+            memberEmail: acc.name,
+          });
           await this.telegramService.ztteam_sendMessage(warnMsg);
         }
 

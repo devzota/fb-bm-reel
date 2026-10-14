@@ -40,8 +40,8 @@ apps/web/.env
 !.env.example
 !apps/api/.env.example
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
+# Temporary test scripts
+apps/api/test_*.js
+apps/api/inspect_*.js
+apps/api/reset_sync.js
+reeldemo.png

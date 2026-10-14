@@ -349,14 +349,16 @@ export class ZTTeamPublisherCron {
         if (u) ownerEmail = u.email;
       }
 
-      this.telegramService.ztteam_sendMessage(
-        `🚨 *[LỖI TỰ ĐỘNG ĐĂNG VIDEO]*\n\n` +
-        `👤 *Thành viên:* ${ownerEmail}\n` +
-        `🚩 *Fanpage:* ${page.name || 'Không rõ'}\n` +
-        `🎬 *Video:* ${reel.wp_post_title || 'Không rõ'}\n` +
-        `❌ *Chi tiết lỗi:* ${errorMsg}\n\n` +
-        `👉 Vui lòng kiểm tra lại cấu hình hoặc token Fanpage!`
-      );
+      const alertMsg = this.telegramService.ztteam_formatAlert({
+        systemName: 'Xuất Bản Fanpage (Đăng Video Reel)',
+        fanpageName: page.name || 'Không rõ',
+        postTitle: reel.wp_post_title || 'Video Reel',
+        step: 'Đăng tải video Reel lên Facebook qua Graph API',
+        rawError: errorMsg,
+        nextAction: 'Hệ thống đã đánh dấu bài viết FAILED. Vui lòng kiểm tra lại token Fanpage hoặc quyền đăng bài.',
+        memberEmail: ownerEmail,
+      });
+      this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
     }
   }
 
@@ -495,13 +497,16 @@ export class ZTTeamPublisherCron {
           if (u) ownerEmail = u.email;
         }
 
-        this.telegramService.ztteam_sendMessage(
-          `🚨 *[LỖI TỰ ĐỘNG ĐĂNG ẢNH]*\n\n` +
-          `👤 *Thành viên:* ${ownerEmail}\n` +
-          `🚩 *Fanpage:* ${page.name || 'Không rõ'}\n` +
-          `🖼 *Ảnh:* ${image.wp_post_title || 'Không rõ'}\n` +
-          `❌ *Chi tiết lỗi:* ${error.message}`
-        );
+        const alertMsg = this.telegramService.ztteam_formatAlert({
+          systemName: 'Xuất Bản Fanpage (Đăng Ảnh 2K)',
+          fanpageName: page.name || 'Không rõ',
+          postTitle: image.wp_post_title || 'Bài viết ảnh',
+          step: 'Đăng tải ảnh 2K và nội dung Caption lên Fanpage Facebook',
+          rawError: error.message,
+          nextAction: 'Đã thử lại 3 lần thất bại. Vui lòng kiểm tra lại token Fanpage hoặc kết nối mạng.',
+          memberEmail: ownerEmail,
+        });
+        this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
       }
     }
   }
@@ -581,14 +586,15 @@ export class ZTTeamPublisherCron {
           }).catch(() => { });
 
           /** ZTTeam: Bắn thông báo cảnh báo lỗi bình luận Step 1 về Telegram */
-          this.telegramService.ztteam_sendMessage(
-            `⚠️ *LỖI TỰ ĐỘNG BÌNH LUẬN (BƯỚC 1 - COMMENT MỒI)*\n\n` +
-            `• *Trang:* ${img.page?.name || 'N/A'}\n` +
-            `• *Bài viết:* ${img.wp_post_title || 'Ảnh 2K'}\n` +
-            `• *Post ID:* \`${img.fb_post_id}\`\n` +
-            `• *Chi tiết lỗi:* ${err.message}\n` +
-            `• *Thời gian:* ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
-          ).catch(() => { });
+          const alertMsg = this.telegramService.ztteam_formatAlert({
+            systemName: 'Tự Động Bình Luận (Auto-Comment)',
+            fanpageName: img.page?.name || 'Không rõ',
+            postTitle: img.wp_post_title || 'Bài viết ảnh 2K',
+            step: 'Bước 1: Đăng bình luận mồi (YES Hook Comment) dưới bài viết',
+            rawError: err.message,
+            nextAction: 'Hệ thống đã tự động chuyển trạng thái để tránh bị nghẽn vòng lặp.',
+          });
+          this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
         }
       }
 
@@ -714,14 +720,15 @@ export class ZTTeamPublisherCron {
           }).catch(() => { });
 
           /** ZTTeam: Bắn thông báo cảnh báo lỗi bình luận Step 2 về Telegram */
-          this.telegramService.ztteam_sendMessage(
-            `⚠️ *LỖI TỰ ĐỘNG BÌNH LUẬN (BƯỚC 2 - LINK BÀI)*\n\n` +
-            `• *Trang:* ${img.page?.name || 'N/A'}\n` +
-            `• *Bài viết:* ${img.wp_post_title || 'Ảnh 2K'}\n` +
-            `• *Post ID:* \`${img.fb_post_id}\`\n` +
-            `• *Chi tiết lỗi:* ${err.message}\n` +
-            `• *Thời gian:* ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
-          ).catch(() => { });
+          const alertMsg = this.telegramService.ztteam_formatAlert({
+            systemName: 'Tự Động Bình Luận (Auto-Comment)',
+            fanpageName: img.page?.name || 'Không rõ',
+            postTitle: img.wp_post_title || 'Bài viết ảnh 2K',
+            step: 'Bước 2: Trả lời bình luận độc giả (kèm Link bài viết Part 2)',
+            rawError: err.message,
+            nextAction: 'Hệ thống đã tự động chuyển trạng thái để tránh bị nghẽn vòng lặp.',
+          });
+          this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
         }
       }
     } catch (error: any) {

@@ -15,6 +15,7 @@ import { ztteam_getImagesPath, ztteam_getStorageRoot, ztteam_getVideosPath } fro
 import { ZTTeamFetcherService } from '../crawler/fetcher.service';
 import { ZTTeamAIService } from '../ai/ai.service';
 import { ZTTeamStoryTestService } from '../story-test/story-test.service';
+import { ZTTeamHookVideoService } from '../media/hook-video.service';
 
 @Controller('image')
 export class ZTTeamImageController {
@@ -27,6 +28,7 @@ export class ZTTeamImageController {
     private readonly facebookService: ZTTeamFacebookService,
     private readonly fetcherService: ZTTeamFetcherService,
     private readonly aiService: ZTTeamAIService,
+    private readonly hookVideoService: ZTTeamHookVideoService,
     @Inject(forwardRef(() => ZTTeamStoryTestService))
     private readonly storyTestService: ZTTeamStoryTestService,
   ) {}
@@ -788,7 +790,10 @@ export class ZTTeamImageController {
   @Post(':id/queue-video')
   @UseGuards(ZTTeamAuthGuard)
   async ztteam_queueVideo(@Param('id') id: string) {
-    const post = await this.prisma.ztteam_images.findUnique({ where: { id } });
+    const post = await this.prisma.ztteam_images.findUnique({
+      where: { id },
+      include: { page: true },
+    });
     if (!post) {
       throw new Error(`Không tìm thấy bài viết ${id}`);
     }
@@ -798,6 +803,22 @@ export class ZTTeamImageController {
       throw new BadRequestException('Bài viết này đã được đăng lên Facebook, không thể đưa vào hàng đợi tạo video nữa.');
     }
 
+    const engine = (post.page as any)?.video_engine || 'hook_image';
+
+    if (engine === 'hook_image') {
+      /** Kích hoạt render Video Hook sắc nét 10s tự động ngay tại server */
+      this.hookVideoService.ztteam_renderHookVideo(id).catch(err => {
+        this.logger.error(`[Manual Hook Video Error] ${err.message}`);
+      });
+
+      return {
+        success: true,
+        message: 'Đang tiến hành tạo Video Hook 10s sắc nét từ ảnh...',
+        post: { ...post, video_status: 'PENDING' },
+      };
+    }
+
+    /** Nếu là Muse: Đưa vào hàng đợi cho Worker ngoài */
     const updated = await this.prisma.ztteam_images.update({
       where: { id },
       data: { video_status: 'PENDING', error_log: null },
@@ -843,6 +864,7 @@ export class ZTTeamImageController {
       data: {
         video_url: videoUrl,
         video_status: 'COMPLETED',
+        video_engine: 'muse',
         video_created_at: new Date(),
       },
     });

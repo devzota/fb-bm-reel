@@ -337,27 +337,50 @@ export class ZTTeamFetcherService {
     const proxyUrl = `https://r.jina.ai/${url}`;
     const response = await fetch(proxyUrl, {
       signal: AbortSignal.timeout(25000),
+      headers: {
+        Accept: 'application/json',
+      },
     });
 
     if (!response.ok) {
       throw new Error(`Proxy bypass failed with status: ${response.status}`);
     }
 
-    const text = await response.text();
-    const lines = text.split('\n');
+    const rawBody = await response.text();
+    let text = rawBody;
     let title = '';
-    for (const line of lines) {
-      if (line.startsWith('Title:')) {
-        title = line.replace('Title:', '').trim();
-        break;
+    let featuredImage: string | null = null;
+    const images: string[] = [];
+
+    try {
+      const json = JSON.parse(rawBody);
+      const data = json?.data || json;
+      if (data && typeof data === 'object') {
+        title = data.title || '';
+        text = data.content || rawBody;
+        const meta = data.metadata || {};
+        featuredImage = meta['og:image'] || meta['twitter:image'] || data.image || null;
+        if (featuredImage) {
+          images.push(featuredImage);
+        }
+      }
+    } catch (e) {
+      /** Fallback nếu Jina trả về text plain thay vì JSON */
+      const lines = rawBody.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('Title:')) {
+          title = line.replace('Title:', '').trim();
+          break;
+        }
       }
     }
 
     const imgRegex = /!\[.*?\]\((https?:\/\/[^\s\)]+)\)/g;
-    const images: string[] = [];
     let m;
     while ((m = imgRegex.exec(text)) !== null) {
-      images.push(m[1]);
+      if (!images.includes(m[1])) {
+        images.push(m[1]);
+      }
     }
 
     /** Clean markdown headers, audio player artifacts (00:00), ad text, and image markdown from text */
@@ -372,7 +395,7 @@ export class ZTTeamFetcherService {
 
     return {
       title: finalTitle,
-      image: images[0] || null,
+      image: featuredImage || images[0] || null,
       images: [...new Set(images)],
       content: cleanContent,
       contentHtml: cleanContent,
@@ -638,11 +661,11 @@ export class ZTTeamFetcherService {
       const baseDomain = this.ztteam_extractDomain(categoryUrl);
       const articleUrls = new Set<string>();
 
-      /** Find all markdown links: [Title](URL) */
-      const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
+      /** Find all candidate URLs in markdown parentheses (supports both [title](url) and nested [![img](img_url) title](article_url)) */
+      const urlRegex = /\((https?:\/\/[^\s\)]+)\)/g;
       let match;
-      while ((match = linkRegex.exec(text)) !== null) {
-        const linkHref = match[2];
+      while ((match = urlRegex.exec(text)) !== null) {
+        const linkHref = match[1];
         try {
           if (this.ztteam_isArticleUrl(linkHref, baseDomain)) {
             articleUrls.add(linkHref);
@@ -688,7 +711,7 @@ export class ZTTeamFetcherService {
 
       this.logger.log(`Downloading source original image for "${storyTitle}": ${imageUrl}`);
 
-      const response = await fetch(imageUrl, {
+      let response = await fetch(imageUrl, {
         signal: AbortSignal.timeout(20000),
         headers: {
           'User-Agent':
@@ -696,6 +719,14 @@ export class ZTTeamFetcherService {
           Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         },
       });
+
+      if (!response.ok) {
+        this.logger.warn(`Direct image download returned status ${response.status}. Retrying via proxy wsrv.nl...`);
+        const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(imageUrl)}`;
+        response = await fetch(proxyUrl, {
+          signal: AbortSignal.timeout(25000),
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error ${response.status} when downloading image`);

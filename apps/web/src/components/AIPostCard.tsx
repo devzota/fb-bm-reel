@@ -296,6 +296,19 @@ export default function ZTTeamAIPostCard({
 
             {item.video_url ? (
               <div className="flex items-center gap-1.5 pointer-events-auto">
+                {/** Nhãn phân biệt loại video: Video từ ảnh vs Video Muse */}
+                {item.video_engine === 'hook_image' || item.video_url.includes('hook_reel_') || (!item.video_engine && !item.video_url.includes('muse_reel_')) ? (
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-500/25 text-amber-300 border border-amber-500/40 backdrop-blur-md flex items-center gap-1 shadow-md" title="Video Reel 10s tạo từ hình ảnh và kịch bản Hook sắc nét">
+                    <span className="material-symbols-outlined text-[13px]">smart_display</span>
+                    VIDEO TỪ ẢNH
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 backdrop-blur-md flex items-center gap-1 shadow-md" title="Video Reel tạo bằng chuyển động Muse AI">
+                    <span className="material-symbols-outlined text-[13px]">motion_photos_on</span>
+                    VIDEO MUSE
+                  </span>
+                )}
+
                 <button
                   type="button"
                   onClick={(e) => {
@@ -312,7 +325,7 @@ export default function ZTTeamAIPostCard({
                   <span className="material-symbols-outlined text-xs">
                     {showVideo ? 'photo' : 'movie'}
                   </span>
-                  <span>{showVideo ? 'XEM ẢNH' : 'REEL 15S'}</span>
+                  <span>{showVideo ? 'XEM ẢNH' : 'PHÁT VIDEO'}</span>
                 </button>
 
                 <a
@@ -335,7 +348,7 @@ export default function ZTTeamAIPostCard({
             ) : item.video_status === 'FAILED' ? (
               <div 
                 className="pointer-events-auto flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-[10px] font-bold text-red-300 backdrop-blur-md shadow-md cursor-help"
-                title={`Muse tạo video thất bại: ${item.error_log || 'Lỗi không xác định'}`}
+                title={`Tạo video thất bại: ${item.error_log || 'Lỗi không xác định'}`}
               >
                 <span className="material-symbols-outlined text-xs text-red-400">error</span>
                 LỖI TẠO REEL

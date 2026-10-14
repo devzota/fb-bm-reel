@@ -75,6 +75,8 @@ model ztteam_pages {
   /** Tab 1 & 2 */
   tags                           String[] @default([])
   post_format                    String   @default("reel") 
+  video_engine                   String   @default("hook_image") /** 'hook_image' (Mặc định) hoặc 'muse' */
+  default_bgm                    String?  /** Tên file nhạc BGM mặc định cho Fanpage */
   
   /** Tab 3 */
   auto_publish_enabled           Boolean  @default(true)
@@ -241,6 +243,7 @@ model ztteam_images {
   image_url       String?
   video_url       String?
   video_status    String    @default("NONE") /** NONE, PENDING, COMPLETED, FAILED */
+  video_engine    String?   @default("hook_image") /** 'hook_image' hoặc 'muse' */
   video_created_at DateTime?
   ai_script       String?   @db.Text
   ai_caption      String?   @db.Text

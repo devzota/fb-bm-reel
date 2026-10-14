@@ -245,13 +245,12 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
       }
 
       try {
-        /** Check history */
+        /** Check history: Skip already successful or intentionally skipped articles, allow retry for FAILED */
         const history = await this.prisma.ztteam_crawl_history.findUnique({
           where: { source_id_url: { source_id: source.id, url } }
         });
 
-        if (history) {
-          /** Already processed this URL */
+        if (history && (history.status === 'SUCCESS' || history.status === 'SKIPPED_NOT_ARTICLE')) {
           continue;
         }
 
@@ -292,7 +291,14 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
         attemptCount++; /** Tăng lượt thử để không bao giờ chạy tràn lan khi lỗi */
         this.logger.error(`Failed to process URL ${url}: ${err.message}`);
         
-        let sourceName = source.name || 'Không rõ';
+        let sourceDomain = 'Không rõ';
+        try {
+          sourceDomain = new URL(source.source_url).hostname;
+        } catch (e) {
+          sourceDomain = source.source_url;
+        }
+
+        let targetWpSite = source.target_site?.wp_url || 'Không rõ';
         let memberEmail = 'N/A';
         if (source.target_site?.owner_user_id) {
           const u = await this.prisma.ztteam_users.findUnique({
@@ -302,13 +308,30 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
           if (u) memberEmail = u.email;
         }
 
-        this.telegramService.ztteam_sendMessage(
-          `🚨 *[LỖI CRAWL BÀI VIẾT]*\n\n` +
-          `👤 *Thành viên:* ${memberEmail}\n` +
-          `🌐 *Website Nguồn:* ${sourceName}\n` +
-          `🔗 *URL:* ${url}\n` +
-          `❌ *Chi tiết lỗi:* ${err.message}`
-        );
+        /** Xác định bước lỗi cụ thể */
+        let failStep = 'Xử lý luồng cào bài viết tự động';
+        const em = (err.message || '').toLowerCase();
+        if (em.includes('không thể lấy nội dung') || em.includes('fetch') || em.includes('không phải bài viết')) {
+          failStep = 'Bước 1/4: Thu thập và kiểm duyệt nội dung bài viết từ website nguồn';
+        } else if (em.includes('sangtao') || em.includes('ảnh gốc') || em.includes('credit')) {
+          failStep = 'Bước 2/4: Tải ảnh gốc dự phòng hoặc tạo ảnh AI 2K';
+        } else if (em.includes('wordpress') || em.includes('featured media') || em.includes('tải ảnh lên wp')) {
+          failStep = 'Bước 3/4: Đăng bài viết & Featured Media lên Website WordPress đích';
+        } else if (em.includes('fanpage') || em.includes('facebook')) {
+          failStep = 'Bước 4/4: Chuẩn bị nội dung bài đăng Fanpage Facebook';
+        }
+
+        const alertText = this.telegramService.ztteam_formatAlert({
+          systemName: `Auto-Crawler (${sourceDomain})`,
+          targetSite: targetWpSite,
+          sourceUrl: url,
+          step: failStep,
+          rawError: err.message,
+          nextAction: 'Hệ thống đã tự động lưu lại và sẽ thử lại ở chu kỳ tiếp theo (sau 5 phút).',
+          memberEmail,
+        });
+
+        this.telegramService.ztteam_sendMessage(alertText).catch(() => {});
         
         try {
           await this.prisma.ztteam_crawl_history.upsert({

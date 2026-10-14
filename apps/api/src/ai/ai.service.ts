@@ -689,4 +689,95 @@ CRITICAL RULES:
       throw new Error(`Lỗi khi AI viết lại kịch bản an toàn: ${e.message}`);
     }
   }
+
+  /**
+   * ZTTeam: Tạo kịch bản Hook 3 đoạn cho Video Reel từ bài viết gốc
+   * Bám sát 100% cốt truyện thực tế của bài viết, cực kỳ kịch tính, lôi cuốn
+   * Tự động highlight từ khóa cảm xúc bằng thẻ <span class="hl">...</span>
+   */
+  async ztteam_generateReelHookStory(
+    title: string,
+    content: string,
+  ): Promise<{ hookHtml: string; plainText: string; paragraphs: string[] }> {
+    const cleanTitle = (title || '').replace(/<[^>]*>?/gm, '').trim();
+    const cleanContent = (content || '').replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
+
+    const systemPrompt = `You are a master viral Facebook Reel copywriter.
+Based strictly on the provided real story:
+Title: "${cleanTitle}"
+Story Details:
+"${cleanContent.substring(0, 3000)}"
+
+Task:
+Write a viral, high-suspense 3-paragraph Hook in ENGLISH for a 10-second Facebook Reel.
+
+CRITICAL REQUIREMENTS:
+1. TRUTHFUL TO ORIGINAL STORY: Every fact must be based strictly on the provided story details. Do NOT make up fake, irrelevant names or events.
+2. EXACTLY 3 DISTINCT PARAGRAPHS:
+   - Paragraph 1: An electrifying, curiosity-inducing opening hook based on the core event.
+   - Paragraph 2: The climax, shocking twist, or intense confrontation from the story.
+   - Paragraph 3: A compelling cliffhanger question or tease that makes the viewer desperate to read the full story in the comments.
+3. KEYWORD HIGHLIGHTS: In each paragraph, wrap 1 to 2 key phrases in <span class="hl">...</span> (e.g. <span class="hl">DNA test</span>, <span class="hl">secret room</span>).
+4. TOTAL LENGTH: Keep between 65 to 85 words total across all 3 paragraphs. (Do NOT exceed 95 words so text fits elegantly on screen).
+5. FORMAT OUTPUT: Return strictly 3 paragraphs separated by double line breaks. No titles, no numbering (like 1., 2.), no quotes, no markdown headers.`;
+
+    try {
+      const settings = await this.getSettings();
+      let rawResponse = '';
+
+      if (settings.activeProvider === 'gemini' && settings.geminiKey) {
+        const { GoogleGenerativeAI } = require('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(settings.geminiKey);
+        const model = genAI.getGenerativeModel({
+          model: 'gemini-1.5-flash',
+          generationConfig: {
+            temperature: 0.75,
+            maxOutputTokens: 300,
+          },
+        });
+        const result = await model.generateContent(systemPrompt);
+        rawResponse = result.response.text();
+      } else {
+        const OpenAI = require('openai').default;
+        const isDeepseek = settings.activeProvider === 'deepseek' && settings.deepseekKey;
+        const rawKey = isDeepseek ? settings.deepseekKey : settings.openaiKey;
+        const apiKey = (rawKey || '').trim();
+        const baseURL = isDeepseek ? 'https://api.deepseek.com' : undefined;
+        const modelName = isDeepseek ? 'deepseek-chat' : 'gpt-4o-mini';
+
+        if (apiKey) {
+          const openai = new OpenAI({ apiKey, baseURL });
+          const response = await openai.chat.completions.create({
+            model: modelName,
+            messages: [
+              { role: 'user', content: systemPrompt },
+            ],
+            max_tokens: 300,
+            temperature: 0.75,
+          });
+          rawResponse = response.choices[0]?.message?.content || '';
+        }
+      }
+
+      if (rawResponse && rawResponse.trim().length > 30) {
+        const paragraphs = rawResponse
+          .trim()
+          .split(/\n\s*\n/)
+          .map(p => p.trim())
+          .filter(p => p.length > 0);
+
+        if (paragraphs.length >= 2) {
+          const finalParagraphs = paragraphs.slice(0, 3);
+          const hookHtml = finalParagraphs.map(p => `<p>${p}</p>`).join('\n');
+          const plainText = finalParagraphs.join('\n\n').replace(/<[^>]*>?/gm, '');
+          return { hookHtml, plainText, paragraphs: finalParagraphs };
+        }
+      }
+
+      throw new Error(`AI không thể tạo đủ 3 đoạn kịch bản hook đạt chuẩn chất lượng (Kết quả trả về quá ngắn hoặc không đúng định dạng).`);
+    } catch (err: any) {
+      this.logger.error(`AI hook generation failed: ${err.message}`);
+      throw new Error(`Lỗi AI tạo Hook kịch tính: ${err.message}`);
+    }
+  }
 }

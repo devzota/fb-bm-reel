@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ZTTeamFetcherService } from './fetcher.service';
 import { ZTTeamWordpressService } from '../wordpress/wordpress.service';
 import { ZTTeamStoryTestService } from '../story-test/story-test.service';
+import { ZTTeamHookVideoService } from '../media/hook-video.service';
 import { ztteam_getImagesPath, ztteam_getStorageRoot } from '../common/ztteam_storage.util';
 
 @Injectable()
@@ -15,6 +16,7 @@ export class ZTTeamCrawlerService {
     private readonly prisma: PrismaService,
     private readonly fetcherService: ZTTeamFetcherService,
     private readonly wordpressService: ZTTeamWordpressService,
+    private readonly hookVideoService: ZTTeamHookVideoService,
     @Inject(forwardRef(() => ZTTeamStoryTestService))
     private readonly storyTestService: ZTTeamStoryTestService,
   ) {}
@@ -347,6 +349,17 @@ export class ZTTeamCrawlerService {
       }
 
       this.logger.log(`Created Fanpage ready-to-post image item: ${imgRecord.id} for Page ${targetPage.id} (${targetPage.name})`);
+
+      /** ZTTeam: Nếu Fanpage cấu hình đăng Reel hoặc Mixed và chọn engine hook_image (mặc định), tự động render Video Hook sắc nét */
+      if (shouldAutoQueueVideo) {
+        const engine = (targetPage as any).video_engine || 'hook_image';
+        if (engine === 'hook_image') {
+          this.logger.log(`[Auto Hook Video] Tự động render video hook 10s cho bài viết ${imgRecord.id} (Page: ${targetPage.name})`);
+          this.hookVideoService.ztteam_renderHookVideo(imgRecord.id).catch(err => {
+            this.logger.error(`[Auto Hook Video Error] ${err.message}`);
+          });
+        }
+      }
     }
 
     /** ZTTeam: Trường hợp KHÔNG CÓ Fanpage nào hoạt động -> Lưu bài viết vào Kho Đăng Thủ Công độc lập (page_id = null) */
@@ -421,6 +434,11 @@ export class ZTTeamCrawlerService {
       }
 
       this.logger.log(`[Manual Studio] Created standalone manual post: ${imgRecord.id} (wp_post_id: ${wpResult.id}) with page_id = null`);
+
+      /** Tự động tạo Video Hook 10s cho bài viết Kho Thủ Công */
+      this.hookVideoService.ztteam_renderHookVideo(imgRecord.id).catch(err => {
+        this.logger.error(`[Manual Store Hook Video Error] ${err.message}`);
+      });
     }
 
     /** 6. Record to crawl history for Dashboard & UI tracking */

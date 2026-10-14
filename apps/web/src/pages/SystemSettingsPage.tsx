@@ -28,6 +28,13 @@ export default function SystemSettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [ztteam_isTestingTelegram, setZtteam_isTestingTelegram] = useState(false);
 
+  /** BGM Library State */
+  const [bgmList, setBgmList] = useState<any[]>([]);
+  const [isLoadingBgm, setIsLoadingBgm] = useState(false);
+  const [isUploadingBgm, setIsUploadingBgm] = useState(false);
+  const [currentPlayingBgm, setCurrentPlayingBgm] = useState<string | null>(null);
+  const [bgmAudio, setBgmAudio] = useState<HTMLAudioElement | null>(null);
+
   useEffect(() => {
     const fetchSettings = async () => {
       try {
@@ -41,7 +48,86 @@ export default function SystemSettingsPage() {
     };
     fetchSettings();
     ztteam_fetchPagesFromDB();
+    ztteam_fetchBgmList();
+
+    return () => {
+      if (bgmAudio) bgmAudio.pause();
+    };
   }, []);
+
+  const ztteam_fetchBgmList = async () => {
+    try {
+      setIsLoadingBgm(true);
+      const res = await api.get('media/bgm');
+      if (res.data?.success && Array.isArray(res.data?.data)) {
+        setBgmList(res.data.data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingBgm(false);
+    }
+  };
+
+  const ztteam_togglePlayBgm = (url: string, filename: string) => {
+    if (currentPlayingBgm === filename && bgmAudio) {
+      bgmAudio.pause();
+      setCurrentPlayingBgm(null);
+      setBgmAudio(null);
+      return;
+    }
+
+    if (bgmAudio) bgmAudio.pause();
+
+    const audio = new Audio(url);
+    audio.play();
+    audio.onended = () => {
+      setCurrentPlayingBgm(null);
+      setBgmAudio(null);
+    };
+    setBgmAudio(audio);
+    setCurrentPlayingBgm(filename);
+  };
+
+  const ztteam_handleUploadBgm = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploadingBgm(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post('media/bgm/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (res.data?.success) {
+        ztteam_showToast('Đã tải bài nhạc lên thư viện thành công!', 'success');
+        await ztteam_fetchBgmList();
+      }
+    } catch (err: any) {
+      ztteam_showToast(err.response?.data?.message || 'Lỗi khi tải file âm thanh', 'error');
+    } finally {
+      setIsUploadingBgm(false);
+      e.target.value = '';
+    }
+  };
+
+  const ztteam_handleDeleteBgm = async (filename: string) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa bản nhạc "${filename}" khỏi hệ thống?`)) return;
+
+    try {
+      if (currentPlayingBgm === filename && bgmAudio) {
+        bgmAudio.pause();
+        setCurrentPlayingBgm(null);
+        setBgmAudio(null);
+      }
+      await api.delete(`media/bgm/${filename}`);
+      ztteam_showToast('Đã xóa bản nhạc thành công!', 'success');
+      await ztteam_fetchBgmList();
+    } catch (err: any) {
+      ztteam_showToast(err.response?.data?.message || 'Lỗi xóa file âm thanh', 'error');
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -351,6 +437,106 @@ export default function SystemSettingsPage() {
           </div>
 
         </div>
+      </div>
+
+      {/** Section 5: BGM Audio Library */}
+      <div className="mt-6 bg-gradient-to-br from-fb-surface via-fb-surface to-cyan-950/20 p-5 rounded-2xl shadow-lg border border-fb-surface-hover/50 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-fb-surface-hover/60">
+          <div>
+            <h3 className="text-base font-bold text-fb-text flex items-center gap-2">
+              <div className="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-cyan-500/15 text-cyan-400">
+                <span className="material-symbols-outlined text-xl">library_music</span>
+              </div>
+              <span>Thư Viện Âm Thanh & Nhạc Nền Reels (BGM Library)</span>
+            </h3>
+            <p className="text-xs font-medium text-fb-text-muted mt-0.5">
+              Kho nhạc nền tự động hòa âm cho Video Hook 10s. Bạn có thể nghe thử, xóa và tải lên các bản nhạc MP3, M4A, WAV mới.
+            </p>
+          </div>
+
+          <label className="bg-gradient-to-r from-fb-blue to-cyan-500 text-white px-4 py-2 rounded-full text-xs font-bold shadow-md shadow-blue-500/20 hover:opacity-90 transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shrink-0">
+            <span className="material-symbols-outlined text-base">{isUploadingBgm ? 'sync' : 'upload_file'}</span>
+            <span>{isUploadingBgm ? 'Đang tải lên...' : '+ Tải Âm Thanh Mới'}</span>
+            <input
+              type="file"
+              accept="audio/mp3,audio/wav,audio/m4a,audio/aac"
+              className="hidden"
+              onChange={ztteam_handleUploadBgm}
+              disabled={isUploadingBgm}
+            />
+          </label>
+        </div>
+
+        {isLoadingBgm ? (
+          <div className="p-8 text-center text-xs font-bold text-fb-text-muted flex items-center justify-center gap-2">
+            <span className="material-symbols-outlined animate-spin text-base text-cyan-400">sync</span>
+            Đang tải danh sách bài hát...
+          </div>
+        ) : bgmList.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {bgmList.map(bgm => {
+              const isPlaying = currentPlayingBgm === bgm.filename;
+              const isDefault = bgm.filename === 'kiss_of_spring.mp3';
+
+              return (
+                <div
+                  key={bgm.id}
+                  className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                    isPlaying
+                      ? 'bg-amber-500/10 border-amber-500/40 shadow-sm'
+                      : 'bg-fb-surface-hover/40 border-fb-surface-hover/60 hover:border-cyan-500/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => ztteam_togglePlayBgm(bgm.url, bgm.filename)}
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                        isPlaying
+                          ? 'bg-amber-400 text-black shadow-md shadow-amber-400/20'
+                          : 'bg-fb-surface text-cyan-400 hover:bg-cyan-500/20 border border-white/5'
+                      }`}
+                      title={isPlaying ? 'Dừng phát' : 'Nghe thử bản nhạc'}
+                    >
+                      <span className="material-symbols-outlined text-xl">
+                        {isPlaying ? 'pause' : 'play_arrow'}
+                      </span>
+                    </button>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-fb-text truncate">{bgm.name}</h4>
+                        {isDefault && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                            Khuyên dùng
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-fb-text-muted truncate mt-0.5">
+                        {bgm.filename} • {bgm.size_formatted}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => ztteam_handleDeleteBgm(bgm.filename)}
+                      className="p-1.5 hover:bg-rose-500/20 text-fb-text-muted hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
+                      title="Xóa bài hát này"
+                    >
+                      <span className="material-symbols-outlined text-base">delete</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-8 text-center text-xs font-medium text-fb-text-muted bg-fb-surface-hover/20 rounded-2xl border border-dashed border-white/10">
+            Chưa có bài hát nào trong thư viện. Bấm "+ Tải Âm Thanh Mới" để thêm bản nhạc nền MP3 đầu tiên!
+          </div>
+        )}
       </div>
     </div>
   );
