@@ -9,6 +9,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { exec } from 'child_process';
 import puppeteer from 'puppeteer';
+import axios from 'axios';
 
 /**
  * Danh sách 6 bộ màu Dark Seamless sang trọng cho Video Reel
@@ -25,15 +26,15 @@ export const ZTTEAM_REEL_PALETTES = [
   {
     name: 'Midnight Navy (Xanh Biển Sâu)',
     background: 'linear-gradient(180deg, #061e38 0%, #031224 50%, #020b17 100%)',
-    highlightColor: '#4cc9f0',
-    accentBorder: '#4cc9f0',
+    highlightColor: '#f3c35b',
+    accentBorder: '#f3c35b',
     avatarGrad: 'linear-gradient(135deg, #1d4ed8, #0369a1)',
   },
   {
     name: 'Dark Emerald (Xanh Ngọc Bích)',
     background: 'linear-gradient(180deg, #062b1e 0%, #031c13 50%, #010f0a 100%)',
-    highlightColor: '#a7f3d0',
-    accentBorder: '#34d399',
+    highlightColor: '#f3c35b',
+    accentBorder: '#f3c35b',
     avatarGrad: 'linear-gradient(135deg, #059669, #065f46)',
   },
   {
@@ -46,15 +47,15 @@ export const ZTTEAM_REEL_PALETTES = [
   {
     name: 'Smoked Espresso (Nâu Cà Phê Gỗ Mun)',
     background: 'linear-gradient(180deg, #2b1d0c 0%, #1a1107 50%, #0e0904 100%)',
-    highlightColor: '#fbd38d',
-    accentBorder: '#fbd38d',
+    highlightColor: '#f3c35b',
+    accentBorder: '#f3c35b',
     avatarGrad: 'linear-gradient(135deg, #78350f, #451a03)',
   },
   {
     name: 'Gunmetal Blue (Xám Xanh Nòng Súng)',
     background: 'linear-gradient(180deg, #112233 0%, #0b1622 50%, #060c14 100%)',
-    highlightColor: '#38bdf8',
-    accentBorder: '#38bdf8',
+    highlightColor: '#f3c35b',
+    accentBorder: '#f3c35b',
     avatarGrad: 'linear-gradient(135deg, #0284c7, #075985)',
   },
 ];
@@ -84,7 +85,7 @@ export class ZTTeamHookVideoService {
     private readonly bgmService: ZTTeamBgmService,
     private readonly telegramService: TelegramService,
     private readonly eventEmitter: EventEmitter2,
-  ) {}
+  ) { }
 
   /**
    * ZTTeam: Render video Reel 10s siêu sắc nét từ hình ảnh và kịch bản Hook 3 đoạn
@@ -143,6 +144,19 @@ export class ZTTeamHookVideoService {
         try {
           if (imageRecord.page.avatar.startsWith('data:image')) {
             pageAvatarDataUri = imageRecord.page.avatar;
+          } else if (imageRecord.page.avatar.startsWith('http://') || imageRecord.page.avatar.startsWith('https://')) {
+            /** Tải ảnh avatar từ URL (Facebook Graph API) và chuyển thành Base64 Data URI */
+            const res = await axios.get(imageRecord.page.avatar, {
+              responseType: 'arraybuffer',
+              timeout: 8000,
+              maxRedirects: 5,
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              },
+            });
+            const mimeType = res.headers['content-type'] || 'image/jpeg';
+            const b64 = Buffer.from(res.data).toString('base64');
+            pageAvatarDataUri = `data:${mimeType};base64,${b64}`;
           } else {
             const avatarLocal = path.join(process.cwd(), imageRecord.page.avatar.replace(/^\//, ''));
             if (fs.existsSync(avatarLocal)) {
@@ -150,15 +164,15 @@ export class ZTTeamHookVideoService {
               pageAvatarDataUri = `data:image/png;base64,${avb64}`;
             }
           }
-        } catch (e) {
-          /** Bỏ qua */
+        } catch (e: any) {
+          this.logger.warn(`Không thể nạp avatar cho Fanpage "${pageName}": ${e?.message || e}`);
         }
       }
 
       /** 3. Tạo kịch bản Hook 3 đoạn bám sát nội dung gốc bằng AI */
       let hookHtml = '';
       const rawStory = imageRecord.ai_caption || imageRecord.wp_post_title || '';
-      
+
       const aiResult = await this.aiService.ztteam_generateReelHookStory(
         imageRecord.wp_post_title || 'Compelling Mystery Story',
         rawStory
@@ -348,11 +362,10 @@ export class ZTTeamHookVideoService {
 
   <div class="content-container">
     <div class="fanpage-header-row">
-      ${
-        pageAvatarDataUri
+      ${pageAvatarDataUri
           ? `<img src="${pageAvatarDataUri}" class="fanpage-avatar">`
           : `<div class="fanpage-avatar">${pageName.substring(0, 2).toUpperCase()}</div>`
-      }
+        }
       <div class="fanpage-meta">
         <div class="fanpage-name">${pageName}</div>
         <div class="fanpage-subtitle">Facebook Creator • Viral Stories</div>
