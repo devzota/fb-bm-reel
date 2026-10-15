@@ -10,11 +10,23 @@ const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
 
-/** Danh sách các hệ thống VPS được phục vụ luân phiên */
-const VPS_TARGETS = [
-  { id: 'auto_ztteam', name: 'auto.ztteam.site', url: process.env.AUTO_ZTTEAM_URL || 'http://169.58.122.248:3000' },
-  { id: 'didinao',     name: 'reel.didinao.com', url: process.env.DIDINAO_URL     || 'http://169.58.122.248:3001' },
-];
+/** Hỗ trợ cấu hình mục tiêu động qua tham số dòng lệnh hoặc biến môi trường */
+const args = process.argv.slice(2);
+const targetArg = args.find(a => a.startsWith('--target='));
+const customTargetUrl = targetArg ? targetArg.split('=')[1] : process.env.TARGET_URL;
+
+let VPS_TARGETS = [];
+if (customTargetUrl) {
+  const cleanUrl = customTargetUrl.replace(/\/$/, '');
+  VPS_TARGETS = [
+    { id: 'custom_target', name: cleanUrl, url: cleanUrl }
+  ];
+} else {
+  VPS_TARGETS = [
+    { id: 'auto_ztteam', name: 'auto.ztteam.site', url: process.env.AUTO_ZTTEAM_URL || 'http://169.58.122.248:3000' },
+    { id: 'didinao',     name: 'reel.didinao.com', url: process.env.DIDINAO_URL     || 'http://169.58.122.248:3001' },
+  ];
+}
 
 let currentTargetIndex = 0;
 const CHROME_DEBUG_URL = process.env.CHROME_DEBUG_URL || 'http://127.0.0.1:9222';
