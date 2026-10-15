@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useZTTeamFacebookStore } from '../stores/facebookStore';
 import { useUIStore } from '../stores/uiStore';
 import { ztteam_decodeHtmlEntity } from '../utils/stringUtils';
@@ -116,6 +116,15 @@ export default function MetaBusinessHub() {
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
+          <Link
+            to="/meta-bm-guide"
+            className="px-3.5 py-2.5 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/30 rounded-full text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors"
+            title="Xem hướng dẫn chi tiết tạo Token BM và cấp quyền 6 bước"
+          >
+            <span className="material-symbols-outlined text-base">menu_book</span>
+            <span>Hướng Dẫn Token</span>
+          </Link>
+
           <button
             onClick={ztteam_loadData}
             disabled={isLoadingData}
