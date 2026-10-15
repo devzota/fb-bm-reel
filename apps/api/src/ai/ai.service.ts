@@ -874,4 +874,64 @@ Generate the 2 cohesive art prompts now.`;
       };
     }
   }
+
+  /**
+   * ZTTeam: Vẽ ảnh chất lượng cao bằng OpenAI DALL-E 3 (Hỗ trợ tỉ lệ vuông 1:1 và ngang 16:9)
+   */
+  async ztteam_renderImageWithDallE(prompt: string, aspectRatio: '1:1' | '16:9' = '1:1'): Promise<{
+    imageUrl: string;
+    localPath: string;
+  }> {
+    const settings = await this.getSettings();
+    const apiKey = (settings.openaiKey || process.env.OPENAI_API_KEY || '').trim();
+    if (!apiKey) {
+      throw new Error('Chưa cấu hình OPENAI_API_KEY trong hệ thống');
+    }
+
+    const OpenAI = require('openai').default;
+    const openai = new OpenAI({ apiKey });
+
+    /** DALL-E 3 hỗ trợ: 1024x1024 (vuông 1:1) và 1792x1024 (ngang 16:9) */
+    const size = aspectRatio === '16:9' ? '1792x1024' : '1024x1024';
+    this.logger.log(`Calling OpenAI DALL-E 3 (size: ${size}) with prompt: ${prompt.substring(0, 80)}...`);
+
+    const response = await openai.images.generate({
+      model: 'dall-e-3',
+      prompt: prompt,
+      n: 1,
+      size: size,
+      quality: 'standard',
+      response_format: 'url',
+    });
+
+    const remoteUrl = response.data?.[0]?.url;
+    if (!remoteUrl) {
+      throw new Error('OpenAI không trả về đường dẫn hình ảnh');
+    }
+
+    /** Tải ảnh về lưu trữ cục bộ trong storage/branding */
+    const fs = require('fs');
+    const path = require('path');
+    const { ztteam_getStorageRoot } = require('../common/ztteam_storage.util');
+    const brandingDir = path.join(ztteam_getStorageRoot(), 'branding');
+    fs.mkdirSync(brandingDir, { recursive: true });
+
+    const filename = `dalle_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
+    const localPath = path.join(brandingDir, filename);
+
+    const imgRes = await fetch(remoteUrl);
+    if (!imgRes.ok) {
+      throw new Error(`Không thể tải ảnh từ OpenAI DALL-E 3: ${imgRes.statusText}`);
+    }
+
+    const arrayBuffer = await imgRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync(localPath, buffer);
+
+    const publicUrl = `/storage/branding/${filename}`;
+    return {
+      imageUrl: publicUrl,
+      localPath,
+    };
+  }
 }

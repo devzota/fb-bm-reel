@@ -2023,19 +2023,13 @@ export class ZTTeamFacebookService {
       recentTitles
     });
 
-    /** 3. Gọi SangTao.ai (ChatGPT Image 2K) để vẽ ảnh Avatar 1:1 */
-    this.logger.log(`Đang sinh Avatar 1:1 qua SangTao.ai với prompt: ${prompts.avatarPrompt}`);
-    const avatarResult = await this.storyTestService.ztteam_renderStoryImage({
-      prompt: prompts.avatarPrompt,
-      aspectRatio: '1:1'
-    });
+    /** 3. Gọi tạo ảnh Avatar 1:1 (SangTao.ai hoặc tự động Fallback sang OpenAI DALL-E 3) */
+    this.logger.log(`Đang sinh Avatar 1:1 với prompt: ${prompts.avatarPrompt}`);
+    const avatarResult = await this.ztteam_renderImageSmartFallback(prompts.avatarPrompt, '1:1');
 
-    /** 4. Gọi SangTao.ai (ChatGPT Image 2K) để vẽ ảnh Cover 16:9 */
-    this.logger.log(`Đang sinh Cover 16:9 qua SangTao.ai với prompt: ${prompts.coverPrompt}`);
-    const coverResult = await this.storyTestService.ztteam_renderStoryImage({
-      prompt: prompts.coverPrompt,
-      aspectRatio: '16:9'
-    });
+    /** 4. Gọi tạo ảnh Cover 16:9 (SangTao.ai hoặc tự động Fallback sang OpenAI DALL-E 3) */
+    this.logger.log(`Đang sinh Cover 16:9 với prompt: ${prompts.coverPrompt}`);
+    const coverResult = await this.ztteam_renderImageSmartFallback(prompts.coverPrompt, '16:9');
 
     return {
       success: true,
@@ -2047,8 +2041,40 @@ export class ZTTeamFacebookService {
       avatarPrompt: prompts.avatarPrompt,
       coverUrl: coverResult.imageUrl,
       coverLocalPath: coverResult.localPath,
-      coverPrompt: prompts.coverPrompt
+      coverPrompt: prompts.coverPrompt,
+      avatarEngine: avatarResult.engine,
+      coverEngine: coverResult.engine
     };
+  }
+
+  /**
+   * ZTTeam: Cơ chế tạo ảnh thông minh: Ưu tiên SangTao.ai, nếu hết credit hoặc lỗi thì tự động Fallback sang OpenAI DALL-E 3
+   */
+  async ztteam_renderImageSmartFallback(prompt: string, aspectRatio: '1:1' | '16:9'): Promise<{
+    imageUrl: string;
+    localPath: string;
+    engine: 'sangtao' | 'dalle';
+  }> {
+    try {
+      this.logger.log(`[Branding] Thử tạo ảnh (${aspectRatio}) bằng SangTao.ai...`);
+      const result = await this.storyTestService.ztteam_renderStoryImage({
+        prompt,
+        aspectRatio,
+      });
+      return {
+        imageUrl: result.imageUrl,
+        localPath: result.localPath,
+        engine: 'sangtao',
+      };
+    } catch (err: any) {
+      this.logger.warn(`[Branding] SangTao.ai gặp sự cố hoặc hết credit (${err.message}). Đang tự động chuyển sang OpenAI DALL-E 3...`);
+      const dalleResult = await this.aiService.ztteam_renderImageWithDallE(prompt, aspectRatio);
+      return {
+        imageUrl: dalleResult.imageUrl,
+        localPath: dalleResult.localPath,
+        engine: 'dalle',
+      };
+    }
   }
 
   /**
@@ -2102,17 +2128,15 @@ export class ZTTeamFacebookService {
     }
 
     const aspectRatio = type === 'avatar' ? '1:1' : '16:9';
-    const result = await this.storyTestService.ztteam_renderStoryImage({
-      prompt: activePrompt,
-      aspectRatio
-    });
+    const result = await this.ztteam_renderImageSmartFallback(activePrompt, aspectRatio);
 
     return {
       success: true,
       type,
       imageUrl: result.imageUrl,
       localPath: result.localPath,
-      prompt: activePrompt
+      prompt: activePrompt,
+      engine: result.engine
     };
   }
 
