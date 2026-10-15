@@ -29,7 +29,11 @@ if (customTargetUrl) {
 }
 
 let currentTargetIndex = 0;
-const CHROME_DEBUG_URL = process.env.CHROME_DEBUG_URL || 'http://127.0.0.1:9222';
+const chromePortArg = args.find(a => a.startsWith('--chrome-port='));
+const customChromePort = chromePortArg ? chromePortArg.split('=')[1] : null;
+const CHROME_DEBUG_URL = customChromePort
+  ? `http://127.0.0.1:${customChromePort}`
+  : (process.env.CHROME_DEBUG_URL || 'http://127.0.0.1:9222');
 const POLL_INTERVAL_MS = 15000; /** 15 giây kiểm tra hàng đợi một lần */
 const TEMP_DIR = path.resolve(__dirname, '../scratch/worker_temp');
 const SUCCESS_COOLDOWN_SEC = 60; /** Nghỉ 60 giây sau khi tạo thành công 1 video */
