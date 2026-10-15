@@ -6,7 +6,7 @@ import { ZTTeamFetcherService } from './fetcher.service';
 import { ZTTeamWordpressService } from '../wordpress/wordpress.service';
 import { ZTTeamCrawlerService } from './crawler.service';
 import Parser from 'rss-parser';
-import { TelegramService } from '../telegram/telegram.service';
+import { TelegramService, ztteam_extractErrorMessage } from '../telegram/telegram.service';
 
 @Injectable()
 export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
@@ -310,7 +310,8 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
 
         /** Xác định bước lỗi cụ thể */
         let failStep = 'Xử lý luồng cào bài viết tự động';
-        const em = (err.message || '').toLowerCase();
+        const extractedError = ztteam_extractErrorMessage(err);
+        const em = extractedError.toLowerCase();
         if (em.includes('không thể lấy nội dung') || em.includes('fetch') || em.includes('không phải bài viết')) {
           failStep = 'Bước 1/4: Thu thập và kiểm duyệt nội dung bài viết từ website nguồn';
         } else if (em.includes('sangtao') || em.includes('ảnh gốc') || em.includes('credit')) {
@@ -326,7 +327,7 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
           targetSite: targetWpSite,
           sourceUrl: url,
           step: failStep,
-          rawError: err.message,
+          rawError: extractedError,
           nextAction: 'Hệ thống đã tự động lưu lại và sẽ thử lại ở chu kỳ tiếp theo (sau 5 phút).',
           memberEmail,
         });

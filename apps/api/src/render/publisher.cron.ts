@@ -6,7 +6,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ztteam_getReelsPath, ztteam_getImagesPath, ztteam_getStorageRoot } from '../common/ztteam_storage.util';
-import { TelegramService } from '../telegram/telegram.service';
+import { TelegramService, ztteam_extractErrorMessage } from '../telegram/telegram.service';
 
 @Injectable()
 export class ZTTeamPublisherCron {
@@ -320,45 +320,54 @@ export class ZTTeamPublisherCron {
           status: 'POSTED',
           is_posted: true,
           posted_at: new Date(),
-          fb_post_id: response.id
+          fb_post_id: response.id,
+          post_retry_count: 0,
         }
       });
 
       this.eventEmitter.emit('reel.updated', { id: reel.id, status: 'POSTED', fb_post_id: response.id });
       this.logger.log(`Reel ${reel.id} successfully auto-published to page ${page.name}`);
     } catch (error: any) {
-      let errorMsg = error.message;
-      if (error.response && error.response.data && error.response.data.error) {
-        errorMsg = error.response.data.error.message || error.response.data.error.type || 'Facebook API Error';
-      }
+      const extractedError = ztteam_extractErrorMessage(error);
+      const currentRetries = (reel.post_retry_count || 0) + 1;
+      this.logger.error(`Failed to auto-publish reel ${reel.id} (Attempt ${currentRetries}/3): ${extractedError}`);
 
-      this.logger.error(`Failed to auto-publish reel ${reel.id}: ${errorMsg}`);
+      if (currentRetries < 3) {
+        await this.prisma.ztteam_reels.update({
+          where: { id: reel.id },
+          data: {
+            post_retry_count: currentRetries,
+            error_log: `Lần thử ${currentRetries}/3 thất bại: ${extractedError}`,
+          }
+        });
+        this.logger.log(`Reel ${reel.id} kept in COMPLETED status for next time slot retry (Attempt ${currentRetries}/3)`);
+      } else {
+        await this.prisma.ztteam_reels.update({
+          where: { id: reel.id },
+          data: {
+            status: 'FAILED',
+            post_retry_count: currentRetries,
+            error_log: `Lỗi đăng bài sau 3 lần thử: ${extractedError}`,
+          }
+        });
 
-      /** Đánh dấu FAILED ngay lập tức và báo Telegram */
-      await this.prisma.ztteam_reels.update({
-        where: { id: reel.id },
-        data: {
-          status: 'FAILED',
-          error_log: `Lỗi đăng bài: ${errorMsg}`
+        let ownerEmail = 'N/A';
+        if (page?.fb_account?.owner_user_id) {
+          const u = await this.prisma.ztteam_users.findUnique({ where: { id: page.fb_account.owner_user_id }, select: { email: true } });
+          if (u) ownerEmail = u.email;
         }
-      });
 
-      let ownerEmail = 'N/A';
-      if (page?.fb_account?.owner_user_id) {
-        const u = await this.prisma.ztteam_users.findUnique({ where: { id: page.fb_account.owner_user_id }, select: { email: true } });
-        if (u) ownerEmail = u.email;
+        const alertMsg = this.telegramService.ztteam_formatAlert({
+          systemName: 'Xuất Bản Fanpage (Đăng Video Reel)',
+          fanpageName: page.name || 'Không rõ',
+          postTitle: reel.wp_post_title || 'Video Reel',
+          step: 'Đăng tải video Reel lên Facebook qua Graph API',
+          rawError: extractedError,
+          nextAction: 'Đã thử lại 3 lần thất bại. Vui lòng kiểm tra lại token Fanpage hoặc quyền đăng bài.',
+          memberEmail: ownerEmail,
+        });
+        this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
       }
-
-      const alertMsg = this.telegramService.ztteam_formatAlert({
-        systemName: 'Xuất Bản Fanpage (Đăng Video Reel)',
-        fanpageName: page.name || 'Không rõ',
-        postTitle: reel.wp_post_title || 'Video Reel',
-        step: 'Đăng tải video Reel lên Facebook qua Graph API',
-        rawError: errorMsg,
-        nextAction: 'Hệ thống đã đánh dấu bài viết FAILED. Vui lòng kiểm tra lại token Fanpage hoặc quyền đăng bài.',
-        memberEmail: ownerEmail,
-      });
-      this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
     }
   }
 
@@ -463,21 +472,23 @@ export class ZTTeamPublisherCron {
           fb_post_id: fbPostId,
           status: 'POSTED',
           comment_step: 0,
+          post_retry_count: 0,
         }
       });
 
       this.logger.log(`Successfully published image ${image.id} to page ${page.name}, Post ID: ${fbPostId} (Comment Step 0 scheduled)`);
       this.eventEmitter.emit('image.posted', { imageId: image.id, pageId: page.id });
     } catch (error: any) {
+      const extractedError = ztteam_extractErrorMessage(error);
       const currentRetries = (image.post_retry_count || 0) + 1;
-      this.logger.error(`Failed to auto-publish image ${image.id} (Attempt ${currentRetries}/3): ${error.message}`);
+      this.logger.error(`Failed to auto-publish image ${image.id} (Attempt ${currentRetries}/3): ${extractedError}`);
 
       if (currentRetries < 3) {
         await this.prisma.ztteam_images.update({
           where: { id: image.id },
           data: {
             post_retry_count: currentRetries,
-            error_log: `Lần thử ${currentRetries}/3 thất bại: ${error.message}`
+            error_log: `Lần thử ${currentRetries}/3 thất bại: ${extractedError}`
           }
         });
         this.logger.log(`Image ${image.id} kept in COMPLETED status for next time slot retry (Attempt ${currentRetries}/3)`);
@@ -487,7 +498,7 @@ export class ZTTeamPublisherCron {
           data: {
             status: 'FAILED',
             post_retry_count: currentRetries,
-            error_log: `Lỗi đăng ảnh sau 3 lần thử: ${error.message}`
+            error_log: `Lỗi đăng ảnh sau 3 lần thử: ${extractedError}`
           }
         });
 
@@ -502,7 +513,7 @@ export class ZTTeamPublisherCron {
           fanpageName: page.name || 'Không rõ',
           postTitle: image.wp_post_title || 'Bài viết ảnh',
           step: 'Đăng tải ảnh 2K và nội dung Caption lên Fanpage Facebook',
-          rawError: error.message,
+          rawError: extractedError,
           nextAction: 'Đã thử lại 3 lần thất bại. Vui lòng kiểm tra lại token Fanpage hoặc kết nối mạng.',
           memberEmail: ownerEmail,
         });
@@ -554,6 +565,18 @@ export class ZTTeamPublisherCron {
       for (const img of step0Images) {
         if (!img.page?.fb_page_id || !img.fb_post_id) continue;
 
+        /** Kiểm tra giãn cách thời gian an toàn nếu đã từng thử thất bại trước đó */
+        if (img.post_retry_count > 0) {
+          const elapsedMs = now.getTime() - new Date(img.updated_at).getTime();
+          /** Lần 1 thất bại -> Chờ ít nhất 5 phút mới thử lần 2. Lần 2 thất bại -> Chờ ít nhất 10 phút mới thử lần 3. */
+          const requiredWaitMs = img.post_retry_count === 1 ? 5 * 60 * 1000 : 10 * 60 * 1000;
+          if (elapsedMs < requiredWaitMs) {
+            const remainingMins = Math.ceil((requiredWaitMs - elapsedMs) / 60000);
+            this.logger.log(`[Auto-Comment Step 1] Delay backoff active for image ${img.id} (Attempt ${img.post_retry_count}/3). Waiting ${remainingMins}m before next attempt...`);
+            continue;
+          }
+        }
+
         try {
           const hookText = `...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇`;
           const res = await this.facebookService.ztteam_publishComment(
@@ -569,32 +592,56 @@ export class ZTTeamPublisherCron {
             data: {
               comment_step: 1,
               hook_comment_id: hookCommentId,
-              hook_comment_at: new Date()
+              hook_comment_at: new Date(),
+              post_retry_count: 0, /** Reset lại về 0 khi thành công */
             }
           });
 
           this.logger.log(`[Auto-Comment Step 1] Posted YES hook comment for image ${img.id} (Post ${img.fb_post_id}, Comment ID: ${hookCommentId})`);
         } catch (err: any) {
-          this.logger.error(`[Auto-Comment Step 1] Failed for image ${img.id}: ${err.message}`);
-          /** Fail-safe: Cap nhat comment_step = 2 de khong bi ket loop vo tan khi gap loi Permissions hoac loi token */
-          await this.prisma.ztteam_images.update({
-            where: { id: img.id },
-            data: {
-              comment_step: 2,
-              error_log: `Lỗi comment mồi: ${err.message}`
-            }
-          }).catch(() => { });
+          const extractedError = ztteam_extractErrorMessage(err);
+          const currentRetries = (img.post_retry_count || 0) + 1;
+          this.logger.error(`[Auto-Comment Step 1] Failed for image ${img.id} (Attempt ${currentRetries}/3): ${extractedError}`);
 
-          /** ZTTeam: Bắn thông báo cảnh báo lỗi bình luận Step 1 về Telegram */
-          const alertMsg = this.telegramService.ztteam_formatAlert({
-            systemName: 'Tự Động Bình Luận (Auto-Comment)',
-            fanpageName: img.page?.name || 'Không rõ',
-            postTitle: img.wp_post_title || 'Bài viết ảnh 2K',
-            step: 'Bước 1: Đăng bình luận mồi (YES Hook Comment) dưới bài viết',
-            rawError: err.message,
-            nextAction: 'Hệ thống đã tự động chuyển trạng thái để tránh bị nghẽn vòng lặp.',
-          });
-          this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
+          if (currentRetries < 3) {
+            /** Tự động giãn cách thời gian để thử lại ở chu kỳ tiếp theo, CHƯA báo Telegram */
+            await this.prisma.ztteam_images.update({
+              where: { id: img.id },
+              data: {
+                post_retry_count: currentRetries,
+                error_log: `Lần thử ${currentRetries}/3 thất bại: ${extractedError}`,
+              }
+            }).catch(() => { });
+            this.logger.log(`[Auto-Comment Step 1] Image ${img.id} scheduled for safe backoff retry ${currentRetries + 1}/3 after ${currentRetries === 1 ? '5' : '10'} minutes.`);
+          } else {
+            /** Sau 3 lần thử thất bại: Đánh dấu comment_step = 2 để kết thúc và báo Telegram */
+            await this.prisma.ztteam_images.update({
+              where: { id: img.id },
+              data: {
+                comment_step: 2,
+                post_retry_count: currentRetries,
+                error_log: `Lỗi comment mồi sau 3 lần thử (giãn cách an toàn 5-10 phút): ${extractedError}`,
+              }
+            }).catch(() => { });
+
+            /** ZTTeam: Bắn thông báo cảnh báo lỗi bình luận Step 1 về Telegram */
+            let ownerEmail = 'N/A';
+            if (img.page?.fb_account?.owner_user_id) {
+              const u = await this.prisma.ztteam_users.findUnique({ where: { id: img.page.fb_account.owner_user_id }, select: { email: true } });
+              if (u) ownerEmail = u.email;
+            }
+
+            const alertMsg = this.telegramService.ztteam_formatAlert({
+              systemName: 'Tự Động Bình Luận (Auto-Comment)',
+              fanpageName: img.page?.name || 'Không rõ',
+              postTitle: img.wp_post_title || 'Bài viết ảnh 2K',
+              step: 'Bước 1: Đăng bình luận mồi (YES Hook Comment) dưới bài viết',
+              rawError: extractedError,
+              nextAction: 'Đã thử lại 3 lần (giãn cách an toàn 5-10 phút) đều thất bại. Hệ thống kết thúc quy trình để bảo vệ Fanpage.',
+              memberEmail: ownerEmail,
+            });
+            this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
+          }
         }
       }
 
@@ -617,6 +664,15 @@ export class ZTTeamPublisherCron {
 
       for (const img of step1Images) {
         if (!img.page?.fb_page_id || !img.hook_comment_id || !img.hook_comment_at) continue;
+
+        /** Kiểm tra giãn cách thời gian an toàn nếu từng thử thất bại ở Step 2 */
+        if (img.post_retry_count > 0) {
+          const elapsedMs = now.getTime() - new Date(img.updated_at).getTime();
+          const requiredWaitMs = img.post_retry_count === 1 ? 5 * 60 * 1000 : 10 * 60 * 1000;
+          if (elapsedMs < requiredWaitMs) {
+            continue;
+          }
+        }
 
         try {
           const hookAgeMs = now.getTime() - new Date(img.hook_comment_at).getTime();
@@ -645,7 +701,8 @@ export class ZTTeamPublisherCron {
             await this.prisma.ztteam_images.update({
               where: { id: img.id },
               data: {
-                comment_step: 2
+                comment_step: 2,
+                post_retry_count: 0,
               }
             });
 
@@ -702,33 +759,55 @@ export class ZTTeamPublisherCron {
             await this.prisma.ztteam_images.update({
               where: { id: img.id },
               data: {
-                comment_step: 2
+                comment_step: 2,
+                post_retry_count: 0,
               }
             });
 
             this.logger.log(`[Auto-Comment Step 2 - Smart Engagement] Found real user (${realCommenterName}) on image ${img.id}! Replied Part 2 to comment ${targetCommentId}`);
           }
         } catch (err: any) {
-          this.logger.error(`[Auto-Comment Step 2] Failed for image ${img.id}: ${err.message}`);
-          /** Fail-safe: Cập nhật comment_step = 2 để kết thúc quy trình, không bị loop */
-          await this.prisma.ztteam_images.update({
-            where: { id: img.id },
-            data: {
-              comment_step: 2,
-              error_log: `Lỗi reply Part 2: ${err.message}`
-            }
-          }).catch(() => { });
+          const extractedError = ztteam_extractErrorMessage(err);
+          const currentRetries = (img.post_retry_count || 0) + 1;
+          this.logger.error(`[Auto-Comment Step 2] Failed for image ${img.id} (Attempt ${currentRetries}/3): ${extractedError}`);
 
-          /** ZTTeam: Bắn thông báo cảnh báo lỗi bình luận Step 2 về Telegram */
-          const alertMsg = this.telegramService.ztteam_formatAlert({
-            systemName: 'Tự Động Bình Luận (Auto-Comment)',
-            fanpageName: img.page?.name || 'Không rõ',
-            postTitle: img.wp_post_title || 'Bài viết ảnh 2K',
-            step: 'Bước 2: Trả lời bình luận độc giả (kèm Link bài viết Part 2)',
-            rawError: err.message,
-            nextAction: 'Hệ thống đã tự động chuyển trạng thái để tránh bị nghẽn vòng lặp.',
-          });
-          this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
+          if (currentRetries < 3) {
+            await this.prisma.ztteam_images.update({
+              where: { id: img.id },
+              data: {
+                post_retry_count: currentRetries,
+                error_log: `Lần thử Step 2 ${currentRetries}/3 thất bại: ${extractedError}`,
+              }
+            }).catch(() => { });
+            this.logger.log(`[Auto-Comment Step 2] Image ${img.id} scheduled for safe backoff retry ${currentRetries + 1}/3 after ${currentRetries === 1 ? '5' : '10'} minutes.`);
+          } else {
+            /** Sau 3 lần thử thất bại mới kết thúc và báo Telegram */
+            await this.prisma.ztteam_images.update({
+              where: { id: img.id },
+              data: {
+                comment_step: 2,
+                post_retry_count: currentRetries,
+                error_log: `Lỗi reply Part 2 sau 3 lần thử (giãn cách 5-10 phút): ${extractedError}`,
+              }
+            }).catch(() => { });
+
+            let ownerEmail = 'N/A';
+            if (img.page?.fb_account?.owner_user_id) {
+              const u = await this.prisma.ztteam_users.findUnique({ where: { id: img.page.fb_account.owner_user_id }, select: { email: true } });
+              if (u) ownerEmail = u.email;
+            }
+
+            const alertMsg = this.telegramService.ztteam_formatAlert({
+              systemName: 'Tự Động Bình Luận (Auto-Comment)',
+              fanpageName: img.page?.name || 'Không rõ',
+              postTitle: img.wp_post_title || 'Bài viết ảnh 2K',
+              step: 'Bước 2: Trả lời bình luận độc giả (kèm Link bài viết Part 2)',
+              rawError: extractedError,
+              nextAction: 'Đã thử lại 3 lần (giãn cách an toàn 5-10 phút) đều thất bại. Hệ thống đã kết thúc quy trình.',
+              memberEmail: ownerEmail,
+            });
+            this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
+          }
         }
       }
     } catch (error: any) {

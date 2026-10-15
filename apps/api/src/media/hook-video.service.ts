@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ZTTeamAIService } from '../ai/ai.service';
 import { ZTTeamBgmService } from './bgm.service';
-import { TelegramService } from '../telegram/telegram.service';
+import { TelegramService, ztteam_extractErrorMessage } from '../telegram/telegram.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ztteam_getVideosPath, ztteam_getImagesPath, ztteam_getSourceOriginalsPath } from '../common/ztteam_storage.util';
 import * as path from 'path';
@@ -469,16 +469,17 @@ export class ZTTeamHookVideoService {
 
       /** Gửi thông báo lỗi chi tiết qua Telegram cho Admin */
       try {
+        const extractedError = ztteam_extractErrorMessage(err);
         const postTitle = imageRecord?.wp_post_title || 'Bài viết #' + imageId;
         const pageTitle = imageRecord?.page?.name || 'Chưa gán Fanpage';
         const teleMessage = this.telegramService.ztteam_formatAlert({
           systemName: 'Render Video Hook (FFmpeg / AI)',
           fanpageName: pageTitle,
           postTitle,
-          step: err.message?.toLowerCase().includes('openai') || err.message?.toLowerCase().includes('gpt')
+          step: extractedError.toLowerCase().includes('openai') || extractedError.toLowerCase().includes('gpt')
             ? 'Bước 1/2: Tạo kịch bản 3 đoạn hook bằng OpenAI'
             : 'Bước 2/2: Ghép phụ đề, hiệu ứng Ken Burns & lồng nhạc nền bằng FFmpeg',
-          rawError: err.message,
+          rawError: extractedError,
           nextAction: 'Hệ thống đã tự động bỏ qua video này và tiếp tục xử lý các bài tiếp theo.',
         });
         await this.telegramService.ztteam_sendMessage(teleMessage);
@@ -486,7 +487,7 @@ export class ZTTeamHookVideoService {
         /** Bỏ qua nếu lỗi gửi Telegram */
       }
 
-      return { success: false, error: err.message };
+      return { success: false, error: ztteam_extractErrorMessage(err) };
     }
   }
 }

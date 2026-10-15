@@ -7,7 +7,7 @@ import axios from 'axios';
 import sharp from 'sharp';
 import { PrismaService } from '../prisma/prisma.service';
 import { ZTTeamAIService } from '../ai/ai.service';
-import { TelegramService } from '../telegram/telegram.service';
+import { TelegramService, ztteam_extractErrorMessage } from '../telegram/telegram.service';
 import { ZTTeamTTSService } from '../audio/tts.service';
 import { ZTTeamFFmpegService } from '../media/ffmpeg.service';
 import { ZTTeamPuppeteerService } from '../media/puppeteer.service';
@@ -238,7 +238,7 @@ export class ZTTeamRenderProcessor implements OnModuleInit {
         fanpageName: pageName,
         postTitle: reelRecord?.wp_post_title || 'Video Reel',
         step: 'Render video đa khung hình bằng AI Muse / Remotion engine',
-        rawError: error.message,
+        rawError: ztteam_extractErrorMessage(error),
         nextAction: 'Đã cập nhật trạng thái FAILED. Hệ thống sẽ tiếp tục xử lý các video khác.',
         memberEmail,
       });

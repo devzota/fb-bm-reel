@@ -43,6 +43,7 @@ services:
       PORT: 3000
       JWT_SECRET: "ZTREEL_SECRET_KEY_2026"
       RENDER_CONCURRENCY: 1
+      NODE_ENV: "production"
     volumes:
       - ztreel3_storage:/usr/src/app/apps/api/storage
       - ztreel3_uploads:/usr/src/app/apps/api/uploads
