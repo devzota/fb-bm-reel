@@ -1967,8 +1967,13 @@ export class ZTTeamFacebookService {
    * ZTTeam: Tự động phân tích chủ đề Fanpage và tạo bộ nhận diện Avatar (1:1) & Cover (16:9) bằng AI Sáng Tạo
    */
   async ztteam_generatePageBranding(internalPageId: string) {
-    const page = await this.prisma.ztteam_pages.findUnique({
-      where: { id: internalPageId },
+    const page = await this.prisma.ztteam_pages.findFirst({
+      where: {
+        OR: [
+          { fb_page_id: internalPageId },
+          { id: internalPageId }
+        ]
+      },
       include: {
         sources: {
           where: { is_active: true }
@@ -1990,13 +1995,13 @@ export class ZTTeamFacebookService {
     }
 
     const recentImages = await this.prisma.ztteam_images.findMany({
-      where: { page_id: internalPageId },
+      where: { page_id: page.id },
       orderBy: { created_at: 'desc' },
       take: 3,
       select: { wp_post_title: true }
     });
     const recentReels = await this.prisma.ztteam_reels.findMany({
-      where: { page_id: internalPageId },
+      where: { page_id: page.id },
       orderBy: { created_at: 'desc' },
       take: 3,
       select: { wp_post_title: true }
@@ -2050,8 +2055,13 @@ export class ZTTeamFacebookService {
    * ZTTeam: Tạo lại riêng Avatar (1:1) hoặc Cover (16:9) nếu muốn đổi phương án khác
    */
   async ztteam_regenerateBrandingItem(internalPageId: string, type: 'avatar' | 'cover', prompt?: string) {
-    const page = await this.prisma.ztteam_pages.findUnique({
-      where: { id: internalPageId },
+    const page = await this.prisma.ztteam_pages.findFirst({
+      where: {
+        OR: [
+          { fb_page_id: internalPageId },
+          { id: internalPageId }
+        ]
+      },
       include: {
         sources: {
           where: { is_active: true }
@@ -2073,7 +2083,7 @@ export class ZTTeamFacebookService {
         connectedSite = site?.wp_url || null;
       }
       const recentImages = await this.prisma.ztteam_images.findMany({
-        where: { page_id: internalPageId },
+        where: { page_id: page.id },
         orderBy: { created_at: 'desc' },
         take: 3,
         select: { wp_post_title: true }
@@ -2115,8 +2125,13 @@ export class ZTTeamFacebookService {
     avatarLocalPath?: string;
     coverLocalPath?: string;
   }) {
-    const page = await this.prisma.ztteam_pages.findUnique({
-      where: { id: internalPageId }
+    const page = await this.prisma.ztteam_pages.findFirst({
+      where: {
+        OR: [
+          { fb_page_id: internalPageId },
+          { id: internalPageId }
+        ]
+      }
     });
 
     if (!page || !page.page_token_encrypted) {
