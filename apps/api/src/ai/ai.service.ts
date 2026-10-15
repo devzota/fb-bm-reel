@@ -891,16 +891,33 @@ Generate the 2 cohesive art prompts now.`;
     const OpenAI = require('openai').default;
     const openai = new OpenAI({ apiKey });
 
-    /** DALL-E 3 hỗ trợ: 1024x1024 (vuông 1:1) và 1792x1024 (ngang 16:9) */
-    const size = aspectRatio === '16:9' ? '1792x1024' : '1024x1024';
-    this.logger.log(`Calling OpenAI DALL-E 3 (size: ${size}) with prompt: ${prompt.substring(0, 80)}...`);
+    /** Tự động chọn model hình ảnh phù hợp với tài khoản */
+    let selectedModel = 'gpt-image-1';
+    try {
+      const list = await openai.models.list();
+      const modelIds: string[] = list.data.map((m: any) => m.id);
+      const candidates = ['gpt-image-1', 'gpt-image-1-mini', 'gpt-image-2', 'dall-e-3', 'dall-e-2'];
+      const found = candidates.find(c => modelIds.includes(c));
+      if (found) {
+        selectedModel = found;
+      }
+    } catch (e: any) {
+      this.logger.warn(`Không thể lấy danh sách models OpenAI, dùng mặc định: ${selectedModel}`);
+    }
+
+    /** Size mapping: DALL-E dùng 1024x1024 / 1792x1024, GPT-Image dùng 1024x1024 / 1536x1024 */
+    let size = '1024x1024';
+    if (aspectRatio === '16:9') {
+      size = selectedModel.startsWith('dall-e') ? '1792x1024' : '1536x1024';
+    }
+
+    this.logger.log(`Calling OpenAI Image API (model: ${selectedModel}, size: ${size}) with prompt: ${prompt.substring(0, 80)}...`);
 
     const response = await openai.images.generate({
-      model: 'dall-e-3',
+      model: selectedModel,
       prompt: prompt,
       n: 1,
       size: size,
-      quality: 'standard',
     });
 
     const item = response.data?.[0];

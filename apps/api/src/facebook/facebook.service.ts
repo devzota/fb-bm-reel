@@ -2048,7 +2048,12 @@ export class ZTTeamFacebookService {
   }
 
   /**
-   * ZTTeam: Cơ chế tạo ảnh thông minh: Ưu tiên SangTao.ai, nếu hết credit hoặc lỗi thì tự động Fallback sang OpenAI DALL-E 3
+   * ZTTeam: Key SangTao.ai dành riêng cho chức năng tạo Avatar & Ảnh bìa Page (cô lập tuyệt đối với ảnh bài viết)
+   */
+  private readonly ZTTEAM_BRANDING_SANGTAO_KEY = 'stai_751dcc6175575dd8cf1f5fc522b62cc2da73e8404f3f527e';
+
+  /**
+   * ZTTeam: Cơ chế tạo ảnh thông minh: Sử dụng Key SangTao.ai riêng biệt được cấp cho Avatar & Cover, nếu lỗi tự động Fallback sang OpenAI
    */
   async ztteam_renderImageSmartFallback(prompt: string, aspectRatio: '1:1' | '16:9'): Promise<{
     imageUrl: string;
@@ -2056,10 +2061,11 @@ export class ZTTeamFacebookService {
     engine: 'sangtao' | 'dalle';
   }> {
     try {
-      this.logger.log(`[Branding] Thử tạo ảnh (${aspectRatio}) bằng SangTao.ai...`);
+      this.logger.log(`[Branding] Đang tạo ảnh (${aspectRatio}) bằng SangTao.ai (Key Branding riêng)...`);
       const result = await this.storyTestService.ztteam_renderStoryImage({
         prompt,
         aspectRatio,
+        apiKey: this.ZTTEAM_BRANDING_SANGTAO_KEY,
       });
       return {
         imageUrl: result.imageUrl,
@@ -2067,7 +2073,7 @@ export class ZTTeamFacebookService {
         engine: 'sangtao',
       };
     } catch (err: any) {
-      this.logger.warn(`[Branding] SangTao.ai gặp sự cố hoặc hết credit (${err.message}). Đang tự động chuyển sang OpenAI DALL-E 3...`);
+      this.logger.warn(`[Branding] SangTao.ai gặp sự cố (${err.message}). Đang tự động chuyển sang OpenAI...`);
       const dalleResult = await this.aiService.ztteam_renderImageWithDallE(prompt, aspectRatio);
       return {
         imageUrl: dalleResult.imageUrl,

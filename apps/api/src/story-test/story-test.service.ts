@@ -749,8 +749,9 @@ Return ONLY valid JSON matching this schema:
     aspectRatio?: '4:5' | '1:1' | '16:9';
     seed?: number;
     isFallback?: boolean;
+    apiKey?: string;
   }): Promise<ZTTeamStorySingleImageResult> {
-    const { prompt, aspectRatio = '4:5', seed, isFallback = false } = params;
+    const { prompt, aspectRatio = '4:5', seed, isFallback = false, apiKey } = params;
     const finalSeed = typeof seed === 'number' && seed > 0 ? seed : Math.floor(Math.random() * 900000) + 100000;
 
     let width = 1080;
@@ -767,11 +768,11 @@ Return ONLY valid JSON matching this schema:
     const imagesDir = path.join(storageRoot, 'story-test', 'single-images');
     fs.mkdirSync(imagesDir, { recursive: true });
 
-    const rawKey = process.env.SANGTAO_API_KEY || '';
+    const rawKey = (apiKey || process.env.SANGTAO_API_KEY || '').trim();
     const sangtaoCleanKey = rawKey.replace(/^["']|["']$/g, '').trim();
 
     if (!sangtaoCleanKey) {
-      throw new HttpException('Chưa cấu hình SANGTAO_API_KEY trong file .env', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException('Chưa cấu hình SANGTAO_API_KEY trong file .env hoặc tham số gọi hàm', HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     let createData: any = null;
@@ -907,6 +908,7 @@ Return ONLY valid JSON matching this schema:
             aspectRatio,
             seed: finalSeed + 1,
             isFallback: true,
+            apiKey,
           });
         }
 
