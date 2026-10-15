@@ -2,6 +2,8 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
+import { ZTTeamAIService } from '../ai/ai.service';
+import { ZTTeamStoryTestService } from '../story-test/story-test.service';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable()
@@ -13,6 +15,8 @@ export class ZTTeamFacebookService {
     private readonly httpService: HttpService,
     private readonly prisma: PrismaService,
     private readonly telegramService: TelegramService,
+    private readonly aiService: ZTTeamAIService,
+    private readonly storyTestService: ZTTeamStoryTestService,
   ) { }
 
   async ztteam_exchangeLongLivedToken(shortToken: string, userId: string) {
@@ -1957,5 +1961,272 @@ export class ZTTeamFacebookService {
     } catch (error: any) {
       throw new BadRequestException(error.response?.data?.error?.message || error.message || 'Lỗi khi comment qua API Facebook');
     }
+  }
+
+  /**
+   * ZTTeam: Tự động phân tích chủ đề Fanpage và tạo bộ nhận diện Avatar (1:1) & Cover (16:9) bằng AI Sáng Tạo
+   */
+  async ztteam_generatePageBranding(internalPageId: string) {
+    const page = await this.prisma.ztteam_pages.findUnique({
+      where: { id: internalPageId },
+      include: {
+        sources: {
+          where: { is_active: true }
+        }
+      }
+    });
+
+    if (!page) {
+      throw new BadRequestException('Fanpage không tồn tại');
+    }
+
+    /** 1. Lấy thông tin nguồn website và các bài viết gần nhất trong kho để nắm bắt chủ đề */
+    let connectedSite: string | null = null;
+    if (page.sources && page.sources.length > 0 && page.sources[0].target_site_id) {
+      const site = await this.prisma.ztteam_target_sites.findUnique({
+        where: { id: page.sources[0].target_site_id }
+      });
+      connectedSite = site?.wp_url || null;
+    }
+
+    const recentImages = await this.prisma.ztteam_images.findMany({
+      where: { page_id: internalPageId },
+      orderBy: { created_at: 'desc' },
+      take: 3,
+      select: { wp_post_title: true }
+    });
+    const recentReels = await this.prisma.ztteam_reels.findMany({
+      where: { page_id: internalPageId },
+      orderBy: { created_at: 'desc' },
+      take: 3,
+      select: { wp_post_title: true }
+    });
+
+    const recentTitles = [
+      ...recentImages.map(i => i.wp_post_title),
+      ...recentReels.map(r => r.wp_post_title)
+    ].filter(Boolean).slice(0, 5);
+
+    this.logger.log(`Tạo bộ nhận diện AI cho Page "${page.name}" (Site: ${connectedSite}, Topics: ${recentTitles.length})`);
+
+    /** 2. Sử dụng OpenAI sáng tạo 2 prompt mỹ thuật chuẩn xác cho Avatar và Cover */
+    const prompts = await this.aiService.ztteam_generateBrandingPrompts({
+      pageName: page.name,
+      category: page.category,
+      siteUrl: connectedSite,
+      tags: page.tags,
+      recentTitles
+    });
+
+    /** 3. Gọi SangTao.ai (ChatGPT Image 2K) để vẽ ảnh Avatar 1:1 */
+    this.logger.log(`Đang sinh Avatar 1:1 qua SangTao.ai với prompt: ${prompts.avatarPrompt}`);
+    const avatarResult = await this.storyTestService.ztteam_renderStoryImage({
+      prompt: prompts.avatarPrompt,
+      aspectRatio: '1:1'
+    });
+
+    /** 4. Gọi SangTao.ai (ChatGPT Image 2K) để vẽ ảnh Cover 16:9 */
+    this.logger.log(`Đang sinh Cover 16:9 qua SangTao.ai với prompt: ${prompts.coverPrompt}`);
+    const coverResult = await this.storyTestService.ztteam_renderStoryImage({
+      prompt: prompts.coverPrompt,
+      aspectRatio: '16:9'
+    });
+
+    return {
+      success: true,
+      pageId: page.id,
+      fbPageId: page.fb_page_id,
+      pageName: page.name,
+      avatarUrl: avatarResult.imageUrl,
+      avatarLocalPath: avatarResult.localPath,
+      avatarPrompt: prompts.avatarPrompt,
+      coverUrl: coverResult.imageUrl,
+      coverLocalPath: coverResult.localPath,
+      coverPrompt: prompts.coverPrompt
+    };
+  }
+
+  /**
+   * ZTTeam: Tạo lại riêng Avatar (1:1) hoặc Cover (16:9) nếu muốn đổi phương án khác
+   */
+  async ztteam_regenerateBrandingItem(internalPageId: string, type: 'avatar' | 'cover', prompt?: string) {
+    const page = await this.prisma.ztteam_pages.findUnique({
+      where: { id: internalPageId },
+      include: {
+        sources: {
+          where: { is_active: true }
+        }
+      }
+    });
+
+    if (!page) {
+      throw new BadRequestException('Fanpage không tồn tại');
+    }
+
+    let activePrompt = prompt;
+    if (!activePrompt || activePrompt.trim().length === 0) {
+      let connectedSite: string | null = null;
+      if (page.sources && page.sources.length > 0 && page.sources[0].target_site_id) {
+        const site = await this.prisma.ztteam_target_sites.findUnique({
+          where: { id: page.sources[0].target_site_id }
+        });
+        connectedSite = site?.wp_url || null;
+      }
+      const recentImages = await this.prisma.ztteam_images.findMany({
+        where: { page_id: internalPageId },
+        orderBy: { created_at: 'desc' },
+        take: 3,
+        select: { wp_post_title: true }
+      });
+      const recentTitles = recentImages.map(i => i.wp_post_title).filter(Boolean);
+
+      const prompts = await this.aiService.ztteam_generateBrandingPrompts({
+        pageName: page.name,
+        category: page.category,
+        siteUrl: connectedSite,
+        tags: page.tags,
+        recentTitles
+      });
+
+      activePrompt = type === 'avatar' ? prompts.avatarPrompt : prompts.coverPrompt;
+    }
+
+    const aspectRatio = type === 'avatar' ? '1:1' : '16:9';
+    const result = await this.storyTestService.ztteam_renderStoryImage({
+      prompt: activePrompt,
+      aspectRatio
+    });
+
+    return {
+      success: true,
+      type,
+      imageUrl: result.imageUrl,
+      localPath: result.localPath,
+      prompt: activePrompt
+    };
+  }
+
+  /**
+   * ZTTeam: Gắn Avatar và/hoặc Ảnh bìa lên Fanpage Facebook qua Meta Graph API
+   */
+  async ztteam_applyPageBranding(internalPageId: string, data: {
+    avatarUrl?: string;
+    coverUrl?: string;
+    avatarLocalPath?: string;
+    coverLocalPath?: string;
+  }) {
+    const page = await this.prisma.ztteam_pages.findUnique({
+      where: { id: internalPageId }
+    });
+
+    if (!page || !page.page_token_encrypted) {
+      throw new BadRequestException('Fanpage không tồn tại hoặc chưa có Token hợp lệ');
+    }
+
+    const FormData = require('form-data');
+    const fs = require('fs');
+    const path = require('path');
+    const { ztteam_getStorageRoot } = require('../common/ztteam_storage.util');
+
+    /** Helper tìm đường dẫn file cục bộ từ URL hoặc localPath */
+    const resolveLocalPath = (rawPath?: string, rawUrl?: string): string | null => {
+      if (rawPath && fs.existsSync(rawPath)) return rawPath;
+      if (rawUrl) {
+        /** Nếu URL có dạng http://.../storage/... */
+        const storageMatch = rawUrl.match(/\/storage\/(.+)$/);
+        if (storageMatch) {
+          const candidate = path.join(ztteam_getStorageRoot(), storageMatch[1]);
+          if (fs.existsSync(candidate)) return candidate;
+        }
+      }
+      return null;
+    };
+
+    let updatedAvatar = false;
+    let updatedCover = false;
+
+    /** 1. Gắn Avatar nếu có */
+    const avatarFilePath = resolveLocalPath(data.avatarLocalPath, data.avatarUrl);
+    if (avatarFilePath) {
+      try {
+        this.logger.log(`Đang gửi lệnh đổi Avatar lên Facebook cho Page ${page.name}...`);
+        const avatarForm = new FormData();
+        avatarForm.append('access_token', page.page_token_encrypted);
+        avatarForm.append('source', fs.createReadStream(avatarFilePath));
+
+        await firstValueFrom(
+          this.httpService.post(
+            `https://graph.facebook.com/${this.API_VERSION}/${page.fb_page_id}/picture`,
+            avatarForm,
+            { headers: avatarForm.getHeaders(), maxBodyLength: Infinity }
+          )
+        );
+        updatedAvatar = true;
+      } catch (err: any) {
+        this.logger.error(`Lỗi cập nhật Avatar trên Facebook: ${err.response?.data?.error?.message || err.message}`);
+        throw new BadRequestException(`Lỗi cập nhật Avatar Facebook: ${err.response?.data?.error?.message || err.message}`);
+      }
+    }
+
+    /** 2. Gắn Ảnh bìa nếu có */
+    const coverFilePath = resolveLocalPath(data.coverLocalPath, data.coverUrl);
+    if (coverFilePath) {
+      try {
+        this.logger.log(`Đang gửi lệnh đổi Ảnh bìa lên Facebook cho Page ${page.name}...`);
+        /** Bước 2a: Tải ảnh vào album của Page với cờ published=false để không spam bảng tin */
+        const coverUploadForm = new FormData();
+        coverUploadForm.append('access_token', page.page_token_encrypted);
+        coverUploadForm.append('published', 'false');
+        coverUploadForm.append('source', fs.createReadStream(coverFilePath));
+
+        const uploadRes = await firstValueFrom(
+          this.httpService.post(
+            `https://graph.facebook.com/${this.API_VERSION}/${page.fb_page_id}/photos`,
+            coverUploadForm,
+            { headers: coverUploadForm.getHeaders(), maxBodyLength: Infinity }
+          )
+        );
+
+        const photoId = uploadRes.data?.id;
+        if (!photoId) {
+          throw new Error('Meta không trả về Photo ID của ảnh bìa');
+        }
+
+        /** Bước 2b: Gán photoId làm ảnh bìa chính thức */
+        await firstValueFrom(
+          this.httpService.post(
+            `https://graph.facebook.com/${this.API_VERSION}/${page.fb_page_id}`,
+            null,
+            {
+              params: {
+                cover: photoId,
+                offset_y: 0,
+                access_token: page.page_token_encrypted
+              }
+            }
+          )
+        );
+        updatedCover = true;
+      } catch (err: any) {
+        this.logger.error(`Lỗi cập nhật Ảnh bìa trên Facebook: ${err.response?.data?.error?.message || err.message}`);
+        throw new BadRequestException(`Lỗi cập nhật Ảnh bìa Facebook: ${err.response?.data?.error?.message || err.message}`);
+      }
+    }
+
+    /** 3. Cập nhật URL Avatar mới trong cơ sở dữ liệu để Web Tool đồng bộ */
+    if (updatedAvatar) {
+      await this.prisma.ztteam_pages.update({
+        where: { id: page.id },
+        data: {
+          avatar: `https://graph.facebook.com/${page.fb_page_id}/picture?type=large`
+        }
+      });
+    }
+
+    return {
+      success: true,
+      message: `Đã áp dụng thành công ${[updatedAvatar ? 'Avatar' : null, updatedCover ? 'Ảnh bìa' : null].filter(Boolean).join(' và ')} lên Fanpage "${page.name}"!`,
+      newAvatarUrl: `https://graph.facebook.com/${page.fb_page_id}/picture?type=large`
+    };
   }
 }

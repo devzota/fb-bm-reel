@@ -74,6 +74,20 @@ export default function FacebookPageSettings() {
   const [isLoadingQueue, setIsLoadingQueue] = useState(false);
   const [isPosting, setIsPosting] = useState<Record<string, boolean>>({});
 
+  /** AI Branding State */
+  const [isGeneratingBranding, setIsGeneratingBranding] = useState(false);
+  const [isRegeneratingAvatar, setIsRegeneratingAvatar] = useState(false);
+  const [isRegeneratingCover, setIsRegeneratingCover] = useState(false);
+  const [isApplyingBranding, setIsApplyingBranding] = useState(false);
+  const [brandingData, setBrandingData] = useState<{
+    avatarUrl?: string;
+    avatarLocalPath?: string;
+    avatarPrompt?: string;
+    coverUrl?: string;
+    coverLocalPath?: string;
+    coverPrompt?: string;
+  } | null>(null);
+
   /** Filter items for Queue and History tabs */
   const queueItems = useMemo(() => {
     return imagesQueue.filter(item => !item.is_posted && item.status !== 'POSTED');
@@ -449,6 +463,86 @@ export default function FacebookPageSettings() {
     return new Date(dateStr).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   };
 
+  /** ZTTeam: Tạo bộ nhận diện AI cho Fanpage (Avatar 1:1 + Cover 16:9) */
+  const ztteam_handleGenerateBranding = async () => {
+    if (!id) return;
+    setIsGeneratingBranding(true);
+    try {
+      ztteam_showToast('Đang phân tích chủ đề bài viết và sinh ảnh 2K qua SangTao.ai, vui lòng đợi 30-60 giây...', 'info');
+      const res = await api.post(`/facebook/pages/${id}/branding/generate`);
+      if (res.data?.success) {
+        setBrandingData(res.data);
+        ztteam_showToast('Đã tạo thành công bộ nhận diện Avatar và Ảnh bìa 2K! Hãy kiểm tra bản xem trước.', 'success');
+      }
+    } catch (err: any) {
+      ztteam_showToast(err.response?.data?.message || err.message || 'Lỗi khi tạo bộ nhận diện AI', 'error');
+    } finally {
+      setIsGeneratingBranding(false);
+    }
+  };
+
+  /** ZTTeam: Tạo lại riêng Avatar hoặc Cover */
+  const ztteam_handleRegenerateItem = async (type: 'avatar' | 'cover') => {
+    if (!id) return;
+    if (type === 'avatar') setIsRegeneratingAvatar(true);
+    else setIsRegeneratingCover(true);
+
+    try {
+      ztteam_showToast(`Đang vẽ lại ${type === 'avatar' ? 'Avatar' : 'Ảnh bìa'} 2K mới...`, 'info');
+      const res = await api.post(`/facebook/pages/${id}/branding/regenerate-item`, { type });
+      if (res.data?.success) {
+        setBrandingData(prev => ({
+          ...prev,
+          ...(type === 'avatar' ? {
+            avatarUrl: res.data.imageUrl,
+            avatarLocalPath: res.data.localPath,
+            avatarPrompt: res.data.prompt,
+          } : {
+            coverUrl: res.data.imageUrl,
+            coverLocalPath: res.data.localPath,
+            coverPrompt: res.data.prompt,
+          })
+        }));
+        ztteam_showToast(`Đã vẽ lại ${type === 'avatar' ? 'Avatar' : 'Ảnh bìa'} thành công!`, 'success');
+      }
+    } catch (err: any) {
+      ztteam_showToast(err.response?.data?.message || err.message || 'Lỗi khi vẽ lại ảnh', 'error');
+    } finally {
+      if (type === 'avatar') setIsRegeneratingAvatar(false);
+      else setIsRegeneratingCover(false);
+    }
+  };
+
+  /** ZTTeam: Gắn Avatar và Cover lên Facebook qua Graph API */
+  const ztteam_handleApplyBranding = () => {
+    if (!id || !brandingData) return;
+    ztteam_showConfirm(
+      'Xác nhận gắn bộ nhận diện lên Facebook',
+      `Hệ thống sẽ cập nhật trực tiếp Avatar và Ảnh bìa mới lên Fanpage "${pageName}". Quá trình này sẽ sử dụng cờ ẩn để không làm spam bảng tin. Bạn có chắc chắn muốn áp dụng?`,
+      async () => {
+        setIsApplyingBranding(true);
+        try {
+          const res = await api.post(`/facebook/pages/${id}/branding/apply`, {
+            avatarUrl: brandingData.avatarUrl,
+            avatarLocalPath: brandingData.avatarLocalPath,
+            coverUrl: brandingData.coverUrl,
+            coverLocalPath: brandingData.coverLocalPath,
+          });
+          if (res.data?.success) {
+            ztteam_showToast(res.data.message || 'Đã cập nhật Avatar & Ảnh bìa lên Fanpage Facebook thành công!', 'success');
+            if (res.data.newAvatarUrl) {
+              setPageAvatar(res.data.newAvatarUrl);
+            }
+          }
+        } catch (err: any) {
+          ztteam_showToast(err.response?.data?.message || err.message || 'Lỗi khi gắn lên Facebook', 'error');
+        } finally {
+          setIsApplyingBranding(false);
+        }
+      }
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="p-12 text-center flex flex-col items-center justify-center">
@@ -579,6 +673,23 @@ export default function FacebookPageSettings() {
             activeTab === 3 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-fb-surface-hover text-fb-text border-white/5'
           }`}>
             {historyItems.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab(4)}
+          className={`px-6 py-3.5 font-black text-sm flex items-center gap-2.5 border-b-2 rounded-t-xl transition-all cursor-pointer ${
+            activeTab === 4
+              ? 'border-cyan-500 text-cyan-400 bg-cyan-500/5 shadow-xs'
+              : 'border-transparent text-fb-text-muted hover:text-fb-text hover:bg-fb-surface-hover/40'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px]">palette</span>
+          4. Bộ Nhận Diện AI
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+            activeTab === 4 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-fb-surface-hover text-fb-text border-white/5'
+          }`}>
+            SangTao 2K
           </span>
         </button>
       </div>
@@ -1183,6 +1294,234 @@ export default function FacebookPageSettings() {
               )}
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/** TAB 4: BỘ NHẬN DIỆN AI (AVATAR & ẢNH BÌA) */}
+      {activeTab === 4 && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/** Control Card */}
+          <div className="bg-fb-surface rounded-2xl shadow-lg border border-fb-surface-hover/50 p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-2xl">auto_awesome</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-base font-black text-fb-text">Sáng Tạo Bộ Nhận Diện Fanpage 2K</h4>
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                    ChatGPT Image 2K
+                  </span>
+                </div>
+                <p className="text-xs text-fb-text-muted mt-1 max-w-2xl leading-relaxed">
+                  Hệ thống tự động trích xuất ngữ cảnh từ website WordPress nguồn, danh mục và 3 bài viết gần nhất để sáng tạo Avatar (1:1) và Ảnh bìa (16:9) hoàn toàn ăn khớp với chủ đề Fanpage.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+              <button
+                onClick={ztteam_handleGenerateBranding}
+                disabled={isGeneratingBranding || isApplyingBranding}
+                className="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-blue-600 via-cyan-600 to-blue-700 hover:opacity-90 text-white font-bold rounded-xl shadow-lg shadow-blue-500/25 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
+              >
+                {isGeneratingBranding ? (
+                  <>
+                    <span className="material-symbols-outlined animate-spin text-[20px]">sync</span>
+                    <span>Đang Tạo 2K (30-60s)...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[20px]">palette</span>
+                    <span>{brandingData ? 'Tạo Lại Cả Bộ Nhận Diện' : 'Tự Động Tạo Bộ Nhận Diện AI'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/** Facebook Page Mockup Preview Card */}
+          <div className="bg-fb-surface rounded-2xl shadow-xl border border-fb-surface-hover/50 overflow-hidden">
+            <div className="p-4 bg-fb-surface-hover/40 border-b border-fb-surface-hover/50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-blue-400 text-lg">preview</span>
+                <span className="text-xs font-bold text-fb-text uppercase tracking-wider">Mô Phỏng Giao Diện Fanpage Facebook</span>
+              </div>
+              <span className="text-[11px] text-fb-text-muted">
+                {brandingData ? 'Bản xem trước trước khi gắn lên Facebook thật' : 'Chưa tạo ảnh AI (Hiển thị ảnh hiện tại)'}
+              </span>
+            </div>
+
+            <div className="p-6 md:p-8">
+              {/** Mockup Frame */}
+              <div className="max-w-4xl mx-auto rounded-2xl overflow-hidden border border-slate-700/60 bg-slate-900/90 shadow-2xl">
+                
+                {/** Cover Section */}
+                <div className="relative aspect-[16/7] md:aspect-[16/6] bg-slate-800 overflow-hidden group">
+                  {brandingData?.coverUrl ? (
+                    <img
+                      src={brandingData.coverUrl}
+                      alt="Fanpage Cover"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 text-center">
+                      <span className="material-symbols-outlined text-5xl mb-2 text-slate-600">panorama</span>
+                      <p className="text-sm font-semibold text-slate-400">Chưa có ảnh bìa AI</p>
+                      <p className="text-xs text-slate-500 mt-1 max-w-sm">Bấm "Tự Động Tạo Bộ Nhận Diện AI" để tạo ảnh bìa 2K sắc nét theo chủ đề bài viết</p>
+                    </div>
+                  )}
+
+                  {/** Regenerate Cover Quick Button */}
+                  {brandingData && (
+                    <div className="absolute top-3 right-3 opacity-90 hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => ztteam_handleRegenerateItem('cover')}
+                        disabled={isRegeneratingCover || isGeneratingBranding || isApplyingBranding}
+                        className="px-3 py-1.5 bg-slate-900/80 hover:bg-slate-900 backdrop-blur-md border border-slate-700/70 text-slate-200 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-lg active:scale-95 transition-all disabled:opacity-50"
+                        title="Vẽ lại riêng ảnh bìa mới"
+                      >
+                        {isRegeneratingCover ? (
+                          <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+                        ) : (
+                          <span className="material-symbols-outlined text-sm text-cyan-400">refresh</span>
+                        )}
+                        <span>Vẽ Lại Bìa (16:9)</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/** Header Profile Row (Avatar + Page Info) */}
+                <div className="px-6 md:px-8 pb-6 pt-0 relative bg-slate-900">
+                  <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-4 -mt-16 sm:-mt-20">
+                    
+                    {/** Avatar + Info */}
+                    <div className="flex flex-col sm:flex-row items-center sm:items-end gap-4 text-center sm:text-left">
+                      {/** Avatar with Hover Re-generate */}
+                      <div className="relative group/avatar shrink-0">
+                        <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full border-4 border-slate-900 shadow-2xl overflow-hidden bg-slate-800 flex items-center justify-center">
+                          {brandingData?.avatarUrl ? (
+                            <img
+                              src={brandingData.avatarUrl}
+                              alt="Avatar"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : pageAvatar ? (
+                            <img
+                              src={pageAvatar}
+                              alt="Avatar"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="material-symbols-outlined text-4xl text-slate-600">account_circle</span>
+                          )}
+                        </div>
+
+                        {/** Regenerate Avatar Quick Button */}
+                        {brandingData && (
+                          <button
+                            onClick={() => ztteam_handleRegenerateItem('avatar')}
+                            disabled={isRegeneratingAvatar || isGeneratingBranding || isApplyingBranding}
+                            className="absolute bottom-1 right-1 p-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded-full shadow-lg active:scale-95 transition-all disabled:opacity-50"
+                            title="Vẽ lại riêng Avatar mới"
+                          >
+                            {isRegeneratingAvatar ? (
+                              <span className="material-symbols-outlined animate-spin text-base">sync</span>
+                            ) : (
+                              <span className="material-symbols-outlined text-base text-cyan-400">refresh</span>
+                            )}
+                          </button>
+                        )}
+                      </div>
+
+                      {/** Page Name & Meta */}
+                      <div className="mb-2">
+                        <h2 className="text-xl sm:text-2xl font-black text-white flex items-center justify-center sm:justify-start gap-2">
+                          <span>{pageName || 'Tên Fanpage'}</span>
+                          <span className="material-symbols-outlined text-blue-400 text-lg" title="Trang được xác thực">verified</span>
+                        </h2>
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-1 text-xs text-slate-400 font-medium">
+                          <span>Chủ đề nhận diện tự động</span>
+                          <span>•</span>
+                          <span className="text-cyan-400 font-semibold">{tags.length > 0 ? tags.join(', ') : 'Tự động theo bài viết'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/** Mock Facebook Buttons */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="px-4 py-2 bg-blue-600/30 text-blue-400 border border-blue-500/30 font-bold rounded-lg text-xs flex items-center gap-1.5 opacity-80 cursor-default">
+                        <span className="material-symbols-outlined text-sm">thumb_up</span>
+                        Đã thích
+                      </div>
+                      <div className="px-4 py-2 bg-slate-800 text-slate-300 border border-slate-700 font-bold rounded-lg text-xs flex items-center gap-1.5 opacity-80 cursor-default">
+                        <span className="material-symbols-outlined text-sm">chat</span>
+                        Nhắn tin
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+              </div>
+
+              {/** Action Bar & Prompt Details */}
+              {brandingData && (
+                <div className="max-w-4xl mx-auto mt-6 pt-6 border-t border-fb-surface-hover/50 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-3 bg-fb-surface-hover/30 rounded-xl border border-fb-surface-hover/40 text-xs">
+                      <div className="font-bold text-fb-text flex items-center gap-1.5 mb-1">
+                        <span className="material-symbols-outlined text-cyan-400 text-sm">face</span>
+                        Prompt Avatar (1:1):
+                      </div>
+                      <p className="text-fb-text-muted italic line-clamp-3" title={brandingData.avatarPrompt}>
+                        "{brandingData.avatarPrompt}"
+                      </p>
+                    </div>
+
+                    <div className="p-3 bg-fb-surface-hover/30 rounded-xl border border-fb-surface-hover/40 text-xs">
+                      <div className="font-bold text-fb-text flex items-center gap-1.5 mb-1">
+                        <span className="material-symbols-outlined text-cyan-400 text-sm">panorama</span>
+                        Prompt Ảnh Bìa (16:9):
+                      </div>
+                      <p className="text-fb-text-muted italic line-clamp-3" title={brandingData.coverPrompt}>
+                        "{brandingData.coverPrompt}"
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-gradient-to-r from-blue-950/40 via-cyan-950/30 to-slate-900/60 p-4 rounded-xl border border-blue-500/20">
+                    <div className="flex items-center gap-2.5 text-xs text-slate-300">
+                      <span className="material-symbols-outlined text-emerald-400 text-lg">verified_user</span>
+                      <span>
+                        Ảnh bìa sẽ được tải vào kho ẩn (<code className="text-cyan-400">published=false</code>), hoàn toàn <b>không tạo bài viết rác</b> trên bảng tin người theo dõi.
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={ztteam_handleApplyBranding}
+                      disabled={isApplyingBranding || isGeneratingBranding}
+                      className="w-full sm:w-auto px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl shadow-lg shadow-blue-600/30 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-sm whitespace-nowrap shrink-0"
+                    >
+                      {isApplyingBranding ? (
+                        <>
+                          <span className="material-symbols-outlined animate-spin text-[20px]">sync</span>
+                          <span>Đang Gắn Lên Facebook...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-[20px]">cloud_upload</span>
+                          <span>Gắn Lên Fanpage Facebook Ngay</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
           </div>
         </div>
       )}

@@ -97,4 +97,30 @@ export class ZTTeamFacebookController {
   ) {
     return this.facebookService.ztteam_autoCommentLink(pageId, postId, manualLink);
   }
+
+  @Post('pages/:pageId/branding/generate')
+  ztteam_generateBranding(@Param('pageId') pageId: string) {
+    return this.facebookService.ztteam_generatePageBranding(pageId);
+  }
+
+  @Post('pages/:pageId/branding/regenerate-item')
+  ztteam_regenerateBrandingItem(
+    @Param('pageId') pageId: string,
+    @Body() body: { type: 'avatar' | 'cover'; prompt?: string }
+  ) {
+    return this.facebookService.ztteam_regenerateBrandingItem(pageId, body.type, body.prompt);
+  }
+
+  @Post('pages/:pageId/branding/apply')
+  ztteam_applyBranding(
+    @Param('pageId') pageId: string,
+    @Body() body: {
+      avatarUrl?: string;
+      coverUrl?: string;
+      avatarLocalPath?: string;
+      coverLocalPath?: string;
+    }
+  ) {
+    return this.facebookService.ztteam_applyPageBranding(pageId, body);
+  }
 }

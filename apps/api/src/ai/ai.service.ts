@@ -780,4 +780,98 @@ CRITICAL REQUIREMENTS:
       throw new Error(`Lỗi AI tạo Hook kịch tính: ${err.message}`);
     }
   }
+
+  /**
+   * ZTTeam: Sáng tạo prompt mỹ thuật chuyên nghiệp cho Avatar (1:1) và Cover (16:9) dựa trên Tên Page, Website nguồn và các bài viết gần nhất
+   */
+  async ztteam_generateBrandingPrompts(params: {
+    pageName: string;
+    category?: string | null;
+    siteUrl?: string | null;
+    tags?: string[];
+    recentTitles?: string[];
+  }): Promise<{ avatarPrompt: string; coverPrompt: string }> {
+    const { pageName, category, siteUrl, tags, recentTitles } = params;
+    const settings = await this.getSettings();
+
+    const systemPrompt = `You are a world-class creative brand director and AI art prompt engineer specializing in Facebook Page visual identities.
+Your task is to analyze a Facebook Page's name, connected website/source, niche tags, and recent article titles to generate TWO cohesive, high-aesthetic image generation prompts for an AI image generator (ChatGPT Image / DALL-E style).
+
+RULES FOR AVATAR PROMPT (Square 1:1, Logo / Emblem / Mascot):
+- Must be a visually iconic, modern 3D emblem, stylized mascot, or minimalist vector-style logo suitable for a circular/square profile picture.
+- Centered composition, clean solid or subtle gradient background with high contrast.
+- NO text, NO letters, NO words, NO typos inside the image (AI text can look distorted).
+- High visual impact, vibrant colors, premium lighting (soft ambient occlusion, 8k render style).
+- English prompt only, under 60 words.
+
+RULES FOR COVER PROMPT (Landscape 16:9, Banner / Scene):
+- Must be a wide, cinematic background illustration or 3D scene matching the theme, color palette, and mood of the avatar.
+- Composition should have the main visual elements centered or on the right side (leaving room on the bottom-left where the avatar badge will sit on Facebook).
+- NO text, NO slogans, NO distorted letters.
+- Highly detailed, cinematic lighting, ultra-wide atmosphere.
+- English prompt only, under 80 words.
+
+OUTPUT FORMAT:
+You MUST return ONLY a valid JSON object with exactly these two keys:
+{
+  "avatarPrompt": "English prompt for Avatar...",
+  "coverPrompt": "English prompt for Cover..."
+}`;
+
+    const userPrompt = `Page Name: ${pageName}
+Category: ${category || 'General'}
+Connected Site: ${siteUrl || 'N/A'}
+Niche Tags: ${tags && tags.length > 0 ? tags.join(', ') : 'N/A'}
+Recent Content Topics / Articles:
+${recentTitles && recentTitles.length > 0 ? recentTitles.map(t => `- ${t}`).join('\n') : '- General lifestyle and interesting stories'}
+
+Generate the 2 cohesive art prompts now.`;
+
+    try {
+      let rawJson = '';
+      if (settings.activeProvider === 'gemini' && settings.geminiKey) {
+        const { GoogleGenerativeAI } = require('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(settings.geminiKey);
+        const model = genAI.getGenerativeModel({
+          model: 'gemini-1.5-flash',
+          generationConfig: { responseMimeType: 'application/json' },
+        });
+        const result = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
+        rawJson = result.response.text();
+      } else {
+        const OpenAI = require('openai').default;
+        const isDeepseek = settings.activeProvider === 'deepseek' && settings.deepseekKey;
+        const rawKey = isDeepseek ? settings.deepseekKey : settings.openaiKey;
+        const apiKey = (rawKey || '').trim();
+        const baseURL = isDeepseek ? 'https://api.deepseek.com' : undefined;
+        const modelName = isDeepseek ? 'deepseek-chat' : 'gpt-4o-mini';
+
+        if (!apiKey) throw new Error(`Missing API Key for ${settings.activeProvider}`);
+
+        const openai = new OpenAI({ apiKey, baseURL });
+        const response = await openai.chat.completions.create({
+          model: modelName,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.8,
+        });
+        rawJson = response.choices[0]?.message?.content || '{}';
+      }
+
+      const parsed = JSON.parse(rawJson);
+      return {
+        avatarPrompt: parsed.avatarPrompt || `Modern 3D emblem icon for ${pageName}, clean aesthetic, vibrant lighting, 8k render, no text`,
+        coverPrompt: parsed.coverPrompt || `Cinematic wide scenic banner for ${pageName}, modern atmosphere, high detail 8k, no text`,
+      };
+    } catch (err: any) {
+      this.logger.error(`Error generating branding prompts: ${err.message}`);
+      return {
+        avatarPrompt: `Modern 3D iconic emblem representing ${pageName}, minimalist clean design, vibrant lighting, smooth render, no text`,
+        coverPrompt: `Cinematic wide atmosphere wallpaper representing ${pageName}, matching aesthetics, cinematic lighting, 8k, no text`,
+      };
+    }
+  }
 }
