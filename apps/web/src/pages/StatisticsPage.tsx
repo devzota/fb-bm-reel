@@ -262,22 +262,22 @@ export default function StatisticsPage() {
               </div>
             </div>
 
-            {/** Card 4: Follower Mới & Tương Tác */}
+            {/** Card 4: Tổng Người Theo Dõi & Tăng Trưởng */}
             <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-amber-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
               <div className="flex justify-between items-start mb-2 sm:mb-3">
                 <div>
-                  <p className="text-[10px] sm:text-xs font-black text-amber-400 uppercase tracking-wider">Follower Mới ({days}d)</p>
+                  <p className="text-[10px] sm:text-xs font-black text-amber-400 uppercase tracking-wider">Tổng Người Theo Dõi</p>
                   <h3 className="text-xl sm:text-3xl font-black text-fb-text mt-0.5 sm:mt-1 group-hover:text-amber-300 transition-colors">
-                    {isLoading ? '...' : ztteam_formatNumber((data as any).overview?.newFollowers || 0)}
+                    {isLoading ? '...' : ztteam_formatNumber((data as any).overview?.totalFollowers || (data as any).overview?.newFollowers || 0)}
                   </h3>
                 </div>
                 <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-xl shadow-lg shadow-amber-500/30 group-hover:scale-105 transition-transform">
-                  <span className="material-symbols-outlined text-lg sm:text-2xl">group_add</span>
+                  <span className="material-symbols-outlined text-lg sm:text-2xl">groups</span>
                 </div>
               </div>
               <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
-                <span className="truncate">Tương tác: <b className="text-amber-300 font-bold">{ztteam_formatNumber((data as any).overview?.totalEngagements || 0)}</b></span>
-                <span className="text-amber-400 font-bold hidden sm:inline">Growth</span>
+                <span className="truncate">Tăng mới ({days}d): <b className="text-amber-300 font-bold">+{ztteam_formatNumber((data as any).overview?.newFollowers || 0)}</b></span>
+                <span className="text-amber-400 font-bold hidden sm:inline">Followers</span>
               </div>
             </div>
           </div>
@@ -487,13 +487,13 @@ export default function StatisticsPage() {
                         </div>
                         
                         <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                          <div className="flex items-center gap-1 bg-blue-500/15 text-blue-400 px-2 py-1 rounded-lg text-xs font-bold" title="Tổng lượt xem (Media Views)">
+                          <div className="flex items-center gap-1 bg-blue-500/15 text-blue-400 px-2 py-1 rounded-lg text-xs font-bold" title="Tổng lượt xem Video (Video Views)">
                             <span className="material-symbols-outlined text-xs">visibility</span>
                             <span>{ztteam_formatNumber(page.views || 0)}</span>
                           </div>
-                          <div className="flex items-center gap-1 bg-cyan-500/15 text-cyan-400 px-2 py-1 rounded-lg text-xs font-bold" title="Follower mới trong 7 ngày">
-                            <span className="material-symbols-outlined text-xs">person_add</span>
-                            <span>+{ztteam_formatNumber(page.newFollowers || 0)}</span>
+                          <div className="flex items-center gap-1 bg-cyan-500/15 text-cyan-400 px-2 py-1 rounded-lg text-xs font-bold" title="Tổng số người theo dõi (Followers)">
+                            <span className="material-symbols-outlined text-xs">groups</span>
+                            <span>{ztteam_formatNumber((page as any).followers || page.newFollowers || 0)}</span>
                           </div>
                         </div>
                       </div>
@@ -565,13 +565,17 @@ export default function StatisticsPage() {
                           </div>
                           
                           <div className="flex items-center gap-3 mt-auto">
-                            <div className="flex items-center gap-1 text-fb-text-muted text-xs font-bold">
+                            <div className="flex items-center gap-1 text-fb-text-muted text-xs font-bold" title="Lượt xem video">
                               <span className="material-symbols-outlined text-xs">visibility</span>
                               <span>{ztteam_formatNumber(post.views || 0)}</span>
                             </div>
-                            <div className="flex items-center gap-1 text-rose-400 text-xs font-bold">
+                            <div className="flex items-center gap-1 text-rose-400 text-xs font-bold" title="Lượt thích / Cảm xúc (Reactions)">
                               <span className="material-symbols-outlined text-xs">favorite</span>
                               <span>{ztteam_formatNumber(post.reactions || 0)}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-blue-400 text-xs font-bold" title="Lượt bình luận (Comments)">
+                              <span className="material-symbols-outlined text-xs">chat_bubble</span>
+                              <span>{ztteam_formatNumber(post.comments || 0)}</span>
                             </div>
                           </div>
                         </div>

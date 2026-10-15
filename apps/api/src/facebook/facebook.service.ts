@@ -918,13 +918,54 @@ export class ZTTeamFacebookService {
     }
   }
 
+  /**
+   * ZTTeam: Lấy tổng số lượt xem video thực tế từ API Facebook /{pageId}/videos
+   */
+  async ztteam_getPageVideoViews(pageId: string): Promise<number> {
+    const page = await this.prisma.ztteam_pages.findFirst({
+      where: { OR: [{ id: pageId }, { fb_page_id: pageId }] },
+    });
+
+    if (!page || !page.page_token_encrypted) {
+      return 0;
+    }
+
+    try {
+      const res = await firstValueFrom(
+        this.httpService.get(`https://graph.facebook.com/${this.API_VERSION}/${page.fb_page_id}/videos`, {
+          params: {
+            fields: 'id,views',
+            limit: 100,
+            access_token: page.page_token_encrypted,
+          },
+        })
+      );
+      const videos = res.data?.data || [];
+      return videos.reduce((sum: number, v: any) => sum + (Number(v.views) || 0), 0);
+    } catch (e: any) {
+      this.logger.warn(`Lỗi lấy video views cho Fanpage ${page.name}: ${e.message}`);
+      return 0;
+    }
+  }
+
   async ztteam_getTopPosts(pageId: string, userId: string) {
     const page = await this.prisma.ztteam_pages.findFirst({
       where: { OR: [{ id: pageId }, { fb_page_id: pageId }] },
       include: { fb_account: true }
     });
 
-    if (!page || page.fb_account.owner_user_id !== userId) {
+    if (!page) {
+      throw new Error('Fanpage không tồn tại');
+    }
+
+    /** Kiểm tra quyền: ADMIN được quyền truy cập mọi Fanpage */
+    const caller = userId ? await this.prisma.ztteam_users.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    }) : null;
+    const isAdmin = caller?.role === 'ADMIN';
+
+    if (!isAdmin && page.fb_account?.owner_user_id !== userId) {
       throw new Error('Fanpage không tồn tại hoặc bạn không có quyền');
     }
 

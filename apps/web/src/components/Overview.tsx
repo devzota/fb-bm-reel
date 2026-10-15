@@ -319,22 +319,22 @@ export default function Overview() {
           </div>
         </div>
 
-        {/** Card 4: Follower Mới & Tương Tác */}
+        {/** Card 4: Tổng Người Theo Dõi & Tăng Trưởng */}
         <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-amber-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
           <div className="flex justify-between items-start mb-2 sm:mb-3">
             <div>
-              <p className="text-[10px] sm:text-xs font-black text-amber-400 uppercase tracking-wider">Follower Mới ({daysRange}d)</p>
+              <p className="text-[10px] sm:text-xs font-black text-amber-400 uppercase tracking-wider">Người Theo Dõi</p>
               <h3 className="text-xl sm:text-3xl font-black text-fb-text mt-0.5 sm:mt-1 group-hover:text-amber-300 transition-colors">
-                {isLoading ? '...' : ztteam_formatNumber(overview.newFollowers)}
+                {isLoading ? '...' : ztteam_formatNumber((overview as any).totalFollowers || (stats as any).totalFollowers || 0)}
               </h3>
             </div>
             <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-xl shadow-lg shadow-amber-500/30 group-hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-lg sm:text-2xl">group_add</span>
+              <span className="material-symbols-outlined text-lg sm:text-2xl">groups</span>
             </div>
           </div>
           <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
-            <span className="truncate">Tương tác: <b className="text-amber-300 font-bold">{ztteam_formatNumber(overview.totalEngagements)}</b></span>
-            <span className="text-amber-400 font-bold hidden sm:inline">Growth</span>
+            <span className="truncate">Tăng mới ({daysRange}d): <b className="text-amber-300 font-bold">+{ztteam_formatNumber(overview.newFollowers || 0)}</b></span>
+            <span className="text-amber-400 font-bold hidden sm:inline">Followers</span>
           </div>
         </div>
 

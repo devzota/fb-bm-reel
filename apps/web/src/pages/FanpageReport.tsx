@@ -190,9 +190,9 @@ export default function FanpageReport() {
     const postsReachSum = filteredTopPosts.reduce((acc, p) => acc + (p.reach || 0), 0);
     const postsEngSum = filteredTopPosts.reduce((acc, p) => acc + (p.engagements || 0), 0);
 
-    const finalViews = totalViewsFromInsights > 0 ? totalViewsFromInsights : postsViewsSum;
-    const finalReach = totalReachFromInsights > 0 ? totalReachFromInsights : postsReachSum;
-    const finalEng = totalEngFromInsights > 0 ? totalEngFromInsights : postsEngSum;
+    const finalViews = Math.max(totalViewsFromInsights, postsViewsSum);
+    const finalReach = Math.max(totalReachFromInsights, postsReachSum);
+    const finalEng = Math.max(totalEngFromInsights, postsEngSum);
 
     const followers = page?.followersCount ?? (page as any)?.followers_count ?? 0;
     const finalFollowers = typeof followers === 'number' && !isNaN(followers) ? followers : 0;
@@ -258,9 +258,9 @@ export default function FanpageReport() {
         const key = formatDateDDMM(d);
         const item = chartList.find(c => c.name === key);
         if (item) {
-          if (item.views === 0) item.views += p.views || 0;
-          if (item.reach === 0) item.reach += p.reach || p.views || 0;
-          if (item.engagements === 0) item.engagements += p.engagements || 0;
+          item.views = Math.max(item.views, p.views || 0);
+          item.reach = Math.max(item.reach, p.reach || p.views || 0);
+          item.engagements = Math.max(item.engagements, p.engagements || 0);
         }
       });
     }
