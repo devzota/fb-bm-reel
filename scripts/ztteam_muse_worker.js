@@ -4,7 +4,19 @@
  * Hỗ trợ luân phiên cả 2 hệ thống: auto.ztteam.site (3000) & reel.didinao.com (3001)
  * Tác giả: ZTTeam (ztteam.site)
  */
-const puppeteer = require('puppeteer');
+let puppeteer;
+try {
+  puppeteer = require('puppeteer-core');
+} catch (e1) {
+  try {
+    puppeteer = require('puppeteer');
+  } catch (e2) {
+    console.error('\n❌ LỖI: Chưa cài đặt thư viện puppeteer-core hoặc puppeteer!');
+    console.error('👉 Vui lòng mở CMD tại thư mục này và chạy lệnh:');
+    console.error('   npm install puppeteer-core axios form-data\n');
+    process.exit(1);
+  }
+}
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');

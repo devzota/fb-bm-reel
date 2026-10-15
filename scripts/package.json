@@ -1,0 +1,14 @@
+{
+  "name": "ztteam-muse-worker",
+  "version": "1.0.0",
+  "description": "ZTTeam Muse.ai Automation Worker",
+  "main": "ztteam_muse_worker.js",
+  "scripts": {
+    "start": "node ztteam_muse_worker.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "form-data": "^4.0.2",
+    "puppeteer-core": "^24.4.0"
+  }
+}
