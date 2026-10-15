@@ -901,12 +901,11 @@ Generate the 2 cohesive art prompts now.`;
       n: 1,
       size: size,
       quality: 'standard',
-      response_format: 'url',
     });
 
-    const remoteUrl = response.data?.[0]?.url;
-    if (!remoteUrl) {
-      throw new Error('OpenAI không trả về đường dẫn hình ảnh');
+    const item = response.data?.[0];
+    if (!item) {
+      throw new Error('OpenAI không trả về kết quả hình ảnh');
     }
 
     /** Tải ảnh về lưu trữ cục bộ trong storage/branding */
@@ -919,14 +918,20 @@ Generate the 2 cohesive art prompts now.`;
     const filename = `dalle_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
     const localPath = path.join(brandingDir, filename);
 
-    const imgRes = await fetch(remoteUrl);
-    if (!imgRes.ok) {
-      throw new Error(`Không thể tải ảnh từ OpenAI DALL-E 3: ${imgRes.statusText}`);
+    if (item.b64_json) {
+      const buffer = Buffer.from(item.b64_json, 'base64');
+      fs.writeFileSync(localPath, buffer);
+    } else if (item.url) {
+      const imgRes = await fetch(item.url);
+      if (!imgRes.ok) {
+        throw new Error(`Không thể tải ảnh từ OpenAI DALL-E 3: ${imgRes.statusText}`);
+      }
+      const arrayBuffer = await imgRes.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      fs.writeFileSync(localPath, buffer);
+    } else {
+      throw new Error('OpenAI không trả về url hoặc b64_json');
     }
-
-    const arrayBuffer = await imgRes.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    fs.writeFileSync(localPath, buffer);
 
     const publicUrl = `/storage/branding/${filename}`;
     return {
