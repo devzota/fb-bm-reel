@@ -724,6 +724,13 @@ export class ZTTeamFacebookService {
       name: page.name,
       avatar: page.avatar,
       tags: page.tags,
+      cover_url: (page as any).cover_url || null,
+      branding: {
+        avatarUrl: (page as any).branding_avatar_url || page.avatar || null,
+        avatarPrompt: (page as any).branding_avatar_prompt || null,
+        coverUrl: (page as any).branding_cover_url || (page as any).cover_url || null,
+        coverPrompt: (page as any).branding_cover_prompt || null,
+      },
       post_format: page.post_format,
       video_engine: (page as any).video_engine || 'hook_image',
       default_bgm: (page as any).default_bgm || null,
@@ -2170,6 +2177,17 @@ export class ZTTeamFacebookService {
     this.logger.log(`Đang sinh Cover 16:9 với prompt: ${prompts.coverPrompt}`);
     const coverResult = await this.ztteam_renderImageSmartFallback(prompts.coverPrompt, '16:9');
 
+    /** ZTTeam: Lưu ngay lập tức ảnh và prompt vừa tạo vào Database để F5 không bao giờ mất */
+    await this.prisma.ztteam_pages.update({
+      where: { id: page.id },
+      data: {
+        branding_avatar_url: avatarResult.imageUrl,
+        branding_avatar_prompt: prompts.avatarPrompt,
+        branding_cover_url: coverResult.imageUrl,
+        branding_cover_prompt: prompts.coverPrompt,
+      } as any
+    });
+
     return {
       success: true,
       pageId: page.id,
@@ -2275,6 +2293,25 @@ export class ZTTeamFacebookService {
     const aspectRatio = type === 'avatar' ? '1:1' : '16:9';
     const result = await this.ztteam_renderImageSmartFallback(activePrompt, aspectRatio);
 
+    /** ZTTeam: Cập nhật dữ liệu vừa vẽ lại vào Database */
+    if (type === 'avatar') {
+      await this.prisma.ztteam_pages.update({
+        where: { id: page.id },
+        data: {
+          branding_avatar_url: result.imageUrl,
+          branding_avatar_prompt: activePrompt,
+        } as any
+      });
+    } else {
+      await this.prisma.ztteam_pages.update({
+        where: { id: page.id },
+        data: {
+          branding_cover_url: result.imageUrl,
+          branding_cover_prompt: activePrompt,
+        } as any
+      });
+    }
+
     return {
       success: true,
       type,
@@ -2333,16 +2370,37 @@ export class ZTTeamFacebookService {
     const avatarFilePath = resolveLocalPath(data.avatarLocalPath, data.avatarUrl);
     if (avatarFilePath) {
       try {
-        this.logger.log(`Đang gửi lệnh đổi Avatar lên Facebook cho Page ${page.name}...`);
-        const avatarForm = new FormData();
-        avatarForm.append('access_token', page.page_token_encrypted);
-        avatarForm.append('source', fs.createReadStream(avatarFilePath));
+        this.logger.log(`Đang tải ảnh Avatar lên Facebook cho Page ${page.name}...`);
+        /** Bước 1a: Upload ảnh đại diện vào photos của Page với published=false để lấy photoId */
+        const avatarUploadForm = new FormData();
+        avatarUploadForm.append('access_token', page.page_token_encrypted);
+        avatarUploadForm.append('published', 'false');
+        avatarUploadForm.append('source', fs.createReadStream(avatarFilePath));
 
+        const uploadRes = await firstValueFrom(
+          this.httpService.post(
+            `https://graph.facebook.com/${this.API_VERSION}/${page.fb_page_id}/photos`,
+            avatarUploadForm,
+            { headers: avatarUploadForm.getHeaders(), maxBodyLength: Infinity }
+          )
+        );
+
+        const avatarPhotoId = uploadRes.data?.id;
+        if (!avatarPhotoId) {
+          throw new Error('Meta không trả về Photo ID của ảnh đại diện');
+        }
+
+        /** Bước 1b: Gán photoId làm Profile Picture qua API /{page-id}/picture */
         await firstValueFrom(
           this.httpService.post(
             `https://graph.facebook.com/${this.API_VERSION}/${page.fb_page_id}/picture`,
-            avatarForm,
-            { headers: avatarForm.getHeaders(), maxBodyLength: Infinity }
+            null,
+            {
+              params: {
+                photo: avatarPhotoId,
+                access_token: page.page_token_encrypted
+              }
+            }
           )
         );
         updatedAvatar = true;
@@ -2397,20 +2455,32 @@ export class ZTTeamFacebookService {
       }
     }
 
-    /** 3. Cập nhật URL Avatar mới trong cơ sở dữ liệu để Web Tool đồng bộ */
+    /** 3. Cập nhật URL Avatar & Cover mới trong cơ sở dữ liệu để Web Tool đồng bộ */
+    const updateData: any = {};
     if (updatedAvatar) {
+      updateData.avatar = `https://graph.facebook.com/${page.fb_page_id}/picture?type=large&_t=${Date.now()}`;
+      if (data.avatarUrl) {
+        updateData.branding_avatar_url = data.avatarUrl;
+      }
+    }
+    if (updatedCover) {
+      if (data.coverUrl) {
+        updateData.cover_url = data.coverUrl;
+        updateData.branding_cover_url = data.coverUrl;
+      }
+    }
+    if (Object.keys(updateData).length > 0) {
       await this.prisma.ztteam_pages.update({
         where: { id: page.id },
-        data: {
-          avatar: `https://graph.facebook.com/${page.fb_page_id}/picture?type=large`
-        }
+        data: updateData
       });
     }
 
     return {
       success: true,
       message: `Đã áp dụng thành công ${[updatedAvatar ? 'Avatar' : null, updatedCover ? 'Ảnh bìa' : null].filter(Boolean).join(' và ')} lên Fanpage "${page.name}"!`,
-      newAvatarUrl: `https://graph.facebook.com/${page.fb_page_id}/picture?type=large`
+      newAvatarUrl: `https://graph.facebook.com/${page.fb_page_id}/picture?type=large&_t=${Date.now()}`,
+      newCoverUrl: data.coverUrl || null
     };
   }
 }

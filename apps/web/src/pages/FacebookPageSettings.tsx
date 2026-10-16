@@ -266,6 +266,18 @@ export default function FacebookPageSettings() {
 
       setSources(data.sources || []);
 
+      /** ZTTeam: Nạp dữ liệu nhận diện Avatar & Cover đã lưu trong Database để F5 không bị mất */
+      if (data.branding && (data.branding.avatarUrl || data.branding.coverUrl)) {
+        setBrandingData(data.branding);
+      } else if (data.avatar || data.cover_url) {
+        setBrandingData({
+          avatarUrl: data.avatar || null,
+          coverUrl: data.cover_url || null,
+          avatarPrompt: null,
+          coverPrompt: null,
+        });
+      }
+
       if (data.sources) {
         data.sources.forEach((s: any) => {
           if (s.target_site_id && !sourceCategoriesCache[s.target_site_id]) {
@@ -533,6 +545,11 @@ export default function FacebookPageSettings() {
             if (res.data.newAvatarUrl) {
               setPageAvatar(res.data.newAvatarUrl);
             }
+            setBrandingData((prev: any) => ({
+              ...prev,
+              avatarUrl: res.data.newAvatarUrl || prev?.avatarUrl,
+              coverUrl: res.data.newCoverUrl || prev?.coverUrl,
+            }));
           }
         } catch (err: any) {
           ztteam_showToast(err.response?.data?.message || err.message || 'Lỗi khi gắn lên Facebook', 'error');

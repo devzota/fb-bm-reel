@@ -795,20 +795,21 @@ CRITICAL REQUIREMENTS:
     const settings = await this.getSettings();
 
     const systemPrompt = `You are a world-class creative brand director and AI art prompt engineer specializing in Facebook Page visual identities.
-Your task is to analyze a Facebook Page's name, connected website/source, niche tags, and recent article titles to generate TWO cohesive, high-aesthetic image generation prompts for an AI image generator (ChatGPT Image / DALL-E style).
+CRITICAL CONTEXT:
+This Facebook Page is dedicated entirely to the STORY niche (captivating stories, life chronicles, emotional dramas, deep human tales, mystery, and storytelling).
+Your task is to take the Page's Name, understand its artistic essence, and creatively imagine TWO cohesive, high-aesthetic image generation prompts (for an AI image generator like ChatGPT Image / DALL-E) specifically tailored for this story page.
 
-RULES FOR AVATAR PROMPT (Square 1:1, Logo / Emblem / Mascot):
-- Must be a visually iconic, modern 3D emblem, stylized mascot, or minimalist vector-style logo suitable for a circular/square profile picture.
-- Centered composition, clean solid or subtle gradient background with high contrast.
-- NO text, NO letters, NO words, NO typos inside the image (AI text can look distorted).
-- High visual impact, vibrant colors, premium lighting (soft ambient occlusion, 8k render style).
+RULES FOR AVATAR PROMPT (Square 1:1, Profile Picture):
+- Represent the unique soul, vibe, or persona of this story page based on the page name and story theme.
+- High visual impact, modern aesthetic, centered composition, premium atmospheric lighting.
+- NO text, NO letters, NO words, NO typos inside the image (strictly visual art).
 - English prompt only, under 60 words.
 
-RULES FOR COVER PROMPT (Landscape 16:9, Banner / Scene):
-- Must be a wide, cinematic background illustration or 3D scene matching the theme, color palette, and mood of the avatar.
-- Composition should have the main visual elements centered or on the right side (leaving room on the bottom-left where the avatar badge will sit on Facebook).
+RULES FOR COVER PROMPT (Landscape 16:9, Banner):
+- A wide, cinematic, and immersive storytelling scene or atmosphere matching the mood and aesthetic of the avatar.
+- Keep the main focal point centered or toward the right side (leaving room on the bottom-left for the avatar profile badge on Facebook).
 - NO text, NO slogans, NO distorted letters.
-- Highly detailed, cinematic lighting, ultra-wide atmosphere.
+- Highly detailed, cinematic lighting, ultra-wide atmospheric depth.
 - English prompt only, under 80 words.
 
 OUTPUT FORMAT:
@@ -818,14 +819,15 @@ You MUST return ONLY a valid JSON object with exactly these two keys:
   "coverPrompt": "English prompt for Cover..."
 }`;
 
-    const userPrompt = `Page Name: ${pageName}
-Category: ${category || 'General'}
-Connected Site: ${siteUrl || 'N/A'}
-Niche Tags: ${tags && tags.length > 0 ? tags.join(', ') : 'N/A'}
-Recent Content Topics / Articles:
-${recentTitles && recentTitles.length > 0 ? recentTitles.map(t => `- ${t}`).join('\n') : '- General lifestyle and interesting stories'}
+    const userPrompt = `Page Name: "${pageName}"
+Niche: Facebook Storytelling & Life Stories
+Category: ${category || 'Stories & Personal Narratives'}
+Connected Site / Source: ${siteUrl || 'N/A'}
+Niche Tags: ${tags && tags.length > 0 ? tags.join(', ') : 'Story, Life, Emotion'}
+Recent Story Topics / Titles:
+${recentTitles && recentTitles.length > 0 ? recentTitles.map(t => `- ${t}`).join('\n') : '- Compelling life stories and emotional chronicles'}
 
-Generate the 2 cohesive art prompts now.`;
+Based on the Page Name "${pageName}" and the Story theme, let your AI creativity flow to generate the 2 cohesive art prompts now.`;
 
     try {
       let rawJson = '';
@@ -863,14 +865,14 @@ Generate the 2 cohesive art prompts now.`;
 
       const parsed = JSON.parse(rawJson);
       return {
-        avatarPrompt: parsed.avatarPrompt || `Modern 3D emblem icon for ${pageName}, clean aesthetic, vibrant lighting, 8k render, no text`,
-        coverPrompt: parsed.coverPrompt || `Cinematic wide scenic banner for ${pageName}, modern atmosphere, high detail 8k, no text`,
+        avatarPrompt: parsed.avatarPrompt || `Artistic storytelling visual identity for ${pageName}, modern evocative aesthetic, cinematic atmospheric lighting, 8k render, no text`,
+        coverPrompt: parsed.coverPrompt || `Breathtaking cinematic wide story atmosphere for ${pageName}, immersive narrative mood, rich lighting, 8k resolution, no text`,
       };
     } catch (err: any) {
       this.logger.error(`Error generating branding prompts: ${err.message}`);
       return {
-        avatarPrompt: `Modern 3D iconic emblem representing ${pageName}, minimalist clean design, vibrant lighting, smooth render, no text`,
-        coverPrompt: `Cinematic wide atmosphere wallpaper representing ${pageName}, matching aesthetics, cinematic lighting, 8k, no text`,
+        avatarPrompt: `Artistic storytelling visual identity for ${pageName}, modern evocative aesthetic, cinematic atmospheric lighting, 8k render, no text`,
+        coverPrompt: `Breathtaking cinematic wide story atmosphere for ${pageName}, immersive narrative mood, rich lighting, 8k resolution, no text`,
       };
     }
   }

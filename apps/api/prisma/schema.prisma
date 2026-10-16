@@ -71,6 +71,11 @@ model ztteam_pages {
   default_reel_template_id  String?
   default_image_template_id String?
   is_active                 Boolean  @default(true)
+  cover_url                 String?
+  branding_avatar_url       String?
+  branding_cover_url        String?
+  branding_avatar_prompt    String?  @db.Text
+  branding_cover_prompt     String?  @db.Text
   
   /** Tab 1 & 2 */
   tags                           String[] @default([])
