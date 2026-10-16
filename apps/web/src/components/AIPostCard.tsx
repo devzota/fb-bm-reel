@@ -18,6 +18,37 @@ export interface ZTTeamAIPostCardProps {
 }
 
 /**
+ * ZTTeam: Kho Mồi Kích Hoạt Đa Dạng (Dynamic Viral Hook Comments)
+ */
+const ZTTEAM_HOOK_TEMPLATES = [
+  `...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇`,
+  `...Want to know the full truth of what happened next? Drop a "YES" or "NEXT" below! 👇🔥`,
+  `...The next part will leave you completely speechless! Leave "YES" in the comments if you want me to share it right away! 👇✨`,
+  `...Curious about the unexpected twist? Comment "YES" down below to continue reading! 👇👀`,
+  `...If you're eager to see how this story ends, let me know by leaving a "YES" in the comments! 👇❤️`,
+  `...Things took a crazy turn right after this! Drop "YES" below and I'll post the continuation! 👇💬`,
+  `...Can you guess what happened next? Leave "YES" in the comments if you want the next part! 👇👇`,
+  `...The ending completely shocked everyone! Comment "YES" or "MORE" below if you want the full story! 👇⚡`,
+  `...Are you ready for the shocking revelation? Leave "YES" down below to find out! 👇😲`,
+  `...You won't believe what they discovered next! Comment "YES" below and I'll send you the rest! 👇🙏`,
+  `...Want to know how this ends? Drop a quick "YES" below and I'll unlock Part 2 for you! 👇💫`,
+  `...I was blown away when I read the ending! Leave "YES" below if you want the conclusion! 👇📖`
+];
+
+function ztteam_getHookTextForPost(seed?: string): string {
+  if (seed) {
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = (hash << 5) - hash + seed.charCodeAt(i);
+      hash |= 0;
+    }
+    const index = Math.abs(hash) % ZTTEAM_HOOK_TEMPLATES.length;
+    return ZTTEAM_HOOK_TEMPLATES[index];
+  }
+  return ZTTEAM_HOOK_TEMPLATES[0];
+}
+
+/**
  * Reusable Unified AI Post Card Component
  * Shared between AI Factory and Facebook Page Settings Queue
  */
@@ -65,12 +96,13 @@ export default function ZTTeamAIPostCard({
     }
   };
 
+  const dynamicHookText = ztteam_getHookTextForPost(item.id);
+
   const ztteam_handleCopyComment1 = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const hookText = `...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇`;
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(hookText);
-      ztteam_showToast('Đã sao chép Bình luận mồi (YES)!', 'success');
+      navigator.clipboard.writeText(dynamicHookText);
+      ztteam_showToast('Đã sao chép Bình luận mồi kích hoạt!', 'success');
     }
   };
 
@@ -538,7 +570,7 @@ export default function ZTTeamAIPostCard({
           </div>
 
           <p className="text-[11px] text-blue-200/90 bg-blue-950/40 p-2 rounded-lg border border-blue-500/20 select-all leading-relaxed italic">
-            ...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇
+            {dynamicHookText}
           </p>
         </div>
 

@@ -226,13 +226,19 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
             </span>
           )}
 
-          {page.autoCreateEnabled ? (
-            <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-full text-[10px] font-extrabold flex items-center gap-1">
-              <span className="material-symbols-outlined text-[13px]">videocam</span> TẠO: BẬT
-            </span>
+          {sourcesCount > 0 ? (
+            page.postFormat === 'reel' || page.postFormat === 'mixed' ? (
+              <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-full text-[10px] font-extrabold flex items-center gap-1 shadow-xs">
+                <span className="material-symbols-outlined text-[13px]">movie</span> TẠO REEL: BẬT
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-full text-[10px] font-extrabold flex items-center gap-1 shadow-xs">
+                <span className="material-symbols-outlined text-[13px]">auto_stories</span> TẠO BÀI: BẬT
+              </span>
+            )
           ) : (
-            <span className="px-2.5 py-1 bg-red-500/10 text-red-400 rounded-full text-[10px] font-extrabold flex items-center gap-1">
-              <span className="material-symbols-outlined text-[13px]">videocam_off</span> TẠO: TẮT
+            <span className="px-2.5 py-1 bg-amber-500/10 text-amber-400 rounded-full text-[10px] font-extrabold flex items-center gap-1 shadow-xs" title="Chưa liên kết website nguồn cào bài">
+              <span className="material-symbols-outlined text-[13px]">link_off</span> CHƯA CÓ NGUỒN
             </span>
           )}
         </div>
@@ -259,11 +265,19 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
           {/** Lưới 2 Cột x 2 Hàng thông số - Mỗi ô có shadow nhẹ làm nổi bật */}
           <div className="grid grid-cols-2 gap-1.5 text-[11px]">
             {/** 1. Nguồn cào */}
-            <div className="flex items-center gap-1.5 min-w-0 bg-slate-800/40 p-2 rounded-lg shadow-sm shadow-black/25">
-              <span className="material-symbols-outlined text-sm text-slate-400 shrink-0">language</span>
+            <div
+              className="flex items-center gap-1.5 min-w-0 bg-slate-800/40 p-2 rounded-lg shadow-sm shadow-black/25"
+              title={page.sourceWebs && page.sourceWebs.length > 0 ? `Nguồn web: ${page.sourceWebs.join(', ')}` : 'Chưa liên kết nguồn cào'}
+            >
+              <span className="material-symbols-outlined text-sm text-cyan-400 shrink-0">language</span>
               <div className="truncate">
                 <span className="text-fb-text-muted">Nguồn: </span>
-                {sourcesCount > 0 ? (
+                {page.sourceWebs && page.sourceWebs.length > 0 ? (
+                  <strong className="text-cyan-400 font-bold" title={page.sourceWebs.join(', ')}>
+                    {page.sourceWebs[0]}
+                    {page.sourceWebs.length > 1 ? ` (+${page.sourceWebs.length - 1})` : ''}
+                  </strong>
+                ) : sourcesCount > 0 ? (
                   <strong className="text-emerald-400 font-semibold">{sourcesCount} web</strong>
                 ) : (
                   <strong className="text-amber-400 font-semibold">Chưa có</strong>

@@ -611,6 +611,16 @@ export class ZTTeamFacebookService {
 
     const accountIds = fbAccounts.map(a => a.id);
 
+    /** ZTTeam: Nạp danh mục website WordPress để map sang domain hiển thị trên Card Fanpage */
+    const targetSites = await this.prisma.ztteam_target_sites.findMany({
+      where: { owner_user_id: userId },
+      select: { id: true, wp_url: true }
+    });
+    const targetSiteMap = new Map<string, string>();
+    for (const site of targetSites) {
+      targetSiteMap.set(site.id, site.wp_url);
+    }
+
     const pages = await this.prisma.ztteam_pages.findMany({
       where: { fb_account_id: { in: accountIds } },
       include: { fb_account: true, sources: true, youtube_settings: true },
@@ -627,6 +637,16 @@ export class ZTTeamFacebookService {
       const pendingReelsCount = await this.prisma.ztteam_reels.count({
         where: { page_id: p.id, is_posted: false, status: { in: ['QUEUED', 'RENDERING', 'COMPLETED'] } }
       });
+
+      const activeSources = (p.sources || []).filter(s => s.is_active);
+      const sourceWebs = activeSources.map(s => {
+        const fullUrl = targetSiteMap.get(s.target_site_id) || '';
+        try {
+          return new URL(fullUrl).hostname.replace(/^www\./, '');
+        } catch {
+          return fullUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+        }
+      }).filter(Boolean);
 
       return {
         id: p.fb_page_id,
@@ -659,7 +679,9 @@ export class ZTTeamFacebookService {
         defaultReelTemplateId: p.default_reel_template_id,
         defaultReelTemplateName: times.templateName,
         nextVideoTitle: times.nextVideoTitle,
-        sourcesCount: p.sources ? p.sources.filter(s => s.is_active).length : 0,
+        sourcesCount: activeSources.length,
+        sourceWebs,
+        primarySourceWeb: sourceWebs[0] || null,
         pendingImagesCount,
         pendingReelsCount,
         totalPendingCount: pendingImagesCount + pendingReelsCount,

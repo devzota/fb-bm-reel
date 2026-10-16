@@ -8,6 +8,41 @@ import * as path from 'path';
 import { ztteam_getReelsPath, ztteam_getImagesPath, ztteam_getStorageRoot } from '../common/ztteam_storage.util';
 import { TelegramService, ztteam_extractErrorMessage } from '../telegram/telegram.service';
 
+/**
+ * ZTTeam: Kho Mồi Kích Hoạt Đa Dạng (Dynamic Viral Hook Comments)
+ * Luân phiên và ngẫu nhiên các mẫu câu kích thích tò mò và kêu gọi để lại comment
+ * Giúp tối ưu tương tác tự nhiên và tuyệt đối chống Facebook quét trùng lặp spam.
+ */
+export function ztteam_getRandomHookComment(seed?: string): string {
+  const HOOK_TEMPLATES = [
+    `...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇`,
+    `...Want to know the full truth of what happened next? Drop a "YES" or "NEXT" below! 👇🔥`,
+    `...The next part will leave you completely speechless! Leave "YES" in the comments if you want me to share it right away! 👇✨`,
+    `...Curious about the unexpected twist? Comment "YES" down below to continue reading! 👇👀`,
+    `...If you're eager to see how this story ends, let me know by leaving a "YES" in the comments! 👇❤️`,
+    `...Things took a crazy turn right after this! Drop "YES" below and I'll post the continuation! 👇💬`,
+    `...Can you guess what happened next? Leave "YES" in the comments if you want the next part! 👇👇`,
+    `...The ending completely shocked everyone! Comment "YES" or "MORE" below if you want the full story! 👇⚡`,
+    `...Are you ready for the shocking revelation? Leave "YES" down below to find out! 👇😲`,
+    `...You won't believe what they discovered next! Comment "YES" below and I'll send you the rest! 👇🙏`,
+    `...Want to know how this ends? Drop a quick "YES" below and I'll unlock Part 2 for you! 👇💫`,
+    `...I was blown away when I read the ending! Leave "YES" below if you want the conclusion! 👇📖`
+  ];
+
+  if (seed) {
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = (hash << 5) - hash + seed.charCodeAt(i);
+      hash |= 0;
+    }
+    const index = Math.abs(hash) % HOOK_TEMPLATES.length;
+    return HOOK_TEMPLATES[index];
+  }
+
+  const randomIndex = Math.floor(Math.random() * HOOK_TEMPLATES.length);
+  return HOOK_TEMPLATES[randomIndex];
+}
+
 @Injectable()
 export class ZTTeamPublisherCron {
   private readonly logger = new Logger(ZTTeamPublisherCron.name);
@@ -578,7 +613,7 @@ export class ZTTeamPublisherCron {
         }
 
         try {
-          const hookText = `...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇`;
+          const hookText = ztteam_getRandomHookComment(img.id);
           const res = await this.facebookService.ztteam_publishComment(
             img.page.fb_page_id,
             img.fb_post_id,
