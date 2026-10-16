@@ -2350,14 +2350,29 @@ export class ZTTeamFacebookService {
     const { ztteam_getStorageRoot } = require('../common/ztteam_storage.util');
 
     /** Helper tìm đường dẫn file cục bộ từ URL hoặc localPath */
-    const resolveLocalPath = (rawPath?: string, rawUrl?: string): string | null => {
+    const resolveLocalPath = async (rawPath?: string, rawUrl?: string): Promise<string | null> => {
       if (rawPath && fs.existsSync(rawPath)) return rawPath;
       if (rawUrl) {
-        /** Nếu URL có dạng http://.../storage/... */
+        /** Nếu URL có dạng http://.../storage/... hoặc /storage/... */
         const storageMatch = rawUrl.match(/\/storage\/(.+)$/);
         if (storageMatch) {
           const candidate = path.join(ztteam_getStorageRoot(), storageMatch[1]);
           if (fs.existsSync(candidate)) return candidate;
+        }
+        /** Nếu URL từ internet bên ngoài, tải tạm về */
+        if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+          try {
+            const resp = await fetch(rawUrl);
+            if (resp.ok) {
+              const buffer = Buffer.from(await resp.arrayBuffer());
+              const tempFile = path.join(ztteam_getStorageRoot(), 'branding', `temp_${Date.now()}_${Math.random().toString(36).substring(7)}.png`);
+              fs.mkdirSync(path.dirname(tempFile), { recursive: true });
+              fs.writeFileSync(tempFile, buffer);
+              return tempFile;
+            }
+          } catch (e: any) {
+            this.logger.warn(`Không thể tải ảnh tạm từ ${rawUrl}: ${e.message}`);
+          }
         }
       }
       return null;
@@ -2367,7 +2382,7 @@ export class ZTTeamFacebookService {
     let updatedCover = false;
 
     /** 1. Gắn Avatar nếu có */
-    const avatarFilePath = resolveLocalPath(data.avatarLocalPath, data.avatarUrl);
+    const avatarFilePath = await resolveLocalPath(data.avatarLocalPath, data.avatarUrl);
     if (avatarFilePath) {
       try {
         this.logger.log(`Đang tải ảnh Avatar lên Facebook cho Page ${page.name}...`);
@@ -2411,7 +2426,7 @@ export class ZTTeamFacebookService {
     }
 
     /** 2. Gắn Ảnh bìa nếu có */
-    const coverFilePath = resolveLocalPath(data.coverLocalPath, data.coverUrl);
+    const coverFilePath = await resolveLocalPath(data.coverLocalPath, data.coverUrl);
     if (coverFilePath) {
       try {
         this.logger.log(`Đang gửi lệnh đổi Ảnh bìa lên Facebook cho Page ${page.name}...`);

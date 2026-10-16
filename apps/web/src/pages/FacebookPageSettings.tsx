@@ -526,38 +526,38 @@ export default function FacebookPageSettings() {
   };
 
   /** ZTTeam: Gắn Avatar và Cover lên Facebook qua Graph API */
-  const ztteam_handleApplyBranding = () => {
+  const ztteam_handleApplyBranding = async () => {
     if (!id || !brandingData) return;
-    ztteam_showConfirm(
+    const confirmed = await ztteam_showConfirm(
       'Xác nhận gắn bộ nhận diện lên Facebook',
-      `Hệ thống sẽ cập nhật trực tiếp Avatar và Ảnh bìa mới lên Fanpage "${pageName}". Quá trình này sẽ sử dụng cờ ẩn để không làm spam bảng tin. Bạn có chắc chắn muốn áp dụng?`,
-      async () => {
-        setIsApplyingBranding(true);
-        try {
-          const res = await api.post(`/facebook/pages/${id}/branding/apply`, {
-            avatarUrl: brandingData.avatarUrl,
-            avatarLocalPath: brandingData.avatarLocalPath,
-            coverUrl: brandingData.coverUrl,
-            coverLocalPath: brandingData.coverLocalPath,
-          });
-          if (res.data?.success) {
-            ztteam_showToast(res.data.message || 'Đã cập nhật Avatar & Ảnh bìa lên Fanpage Facebook thành công!', 'success');
-            if (res.data.newAvatarUrl) {
-              setPageAvatar(res.data.newAvatarUrl);
-            }
-            setBrandingData((prev: any) => ({
-              ...prev,
-              avatarUrl: res.data.newAvatarUrl || prev?.avatarUrl,
-              coverUrl: res.data.newCoverUrl || prev?.coverUrl,
-            }));
-          }
-        } catch (err: any) {
-          ztteam_showToast(err.response?.data?.message || err.message || 'Lỗi khi gắn lên Facebook', 'error');
-        } finally {
-          setIsApplyingBranding(false);
-        }
-      }
+      `Hệ thống sẽ cập nhật trực tiếp Avatar và Ảnh bìa mới lên Fanpage "${pageName}". Quá trình này sẽ sử dụng cờ ẩn để không làm spam bảng tin. Bạn có chắc chắn muốn áp dụng?`
     );
+    if (!confirmed) return;
+
+    setIsApplyingBranding(true);
+    try {
+      const res = await api.post(`/facebook/pages/${id}/branding/apply`, {
+        avatarUrl: brandingData.avatarUrl,
+        avatarLocalPath: brandingData.avatarLocalPath,
+        coverUrl: brandingData.coverUrl,
+        coverLocalPath: brandingData.coverLocalPath,
+      });
+      if (res.data?.success) {
+        ztteam_showToast(res.data.message || 'Đã cập nhật Avatar & Ảnh bìa lên Fanpage Facebook thành công!', 'success');
+        if (res.data.newAvatarUrl) {
+          setPageAvatar(res.data.newAvatarUrl);
+        }
+        setBrandingData((prev: any) => ({
+          ...prev,
+          avatarUrl: res.data.newAvatarUrl || prev?.avatarUrl,
+          coverUrl: res.data.newCoverUrl || prev?.coverUrl,
+        }));
+      }
+    } catch (err: any) {
+      ztteam_showToast(err.response?.data?.message || err.message || 'Lỗi khi gắn lên Facebook', 'error');
+    } finally {
+      setIsApplyingBranding(false);
+    }
   };
 
   if (isLoading) {
