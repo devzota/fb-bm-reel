@@ -607,8 +607,14 @@ export default function FacebookPages() {
     }
     try {
       setIsSubmittingBulkSource(true);
+      /** Phân giải danh sách ID sang Database UUID nếu có để tối ưu tốc độ */
+      const resolvedPageIds = selectedPageIds.map(selId => {
+        const found = pages.find(p => p.id === selId || (p as any).internalId === selId);
+        return (found as any)?.internalId || selId;
+      });
+
       const res = await api.post('/facebook/pages/bulk-assign-sources', {
-        pageIds: selectedPageIds,
+        pageIds: resolvedPageIds,
         targetSiteId: bulkTargetSiteId,
         targetCategoryId: bulkTargetCategoryId || null,
         mode: bulkSourceMode,
@@ -633,8 +639,14 @@ export default function FacebookPages() {
     }
     try {
       setIsSubmittingBulkSchedule(true);
+      /** Phân giải danh sách ID sang Database UUID nếu có để tối ưu tốc độ */
+      const resolvedPageIds = selectedPageIds.map(selId => {
+        const found = pages.find(p => p.id === selId || (p as any).internalId === selId);
+        return (found as any)?.internalId || selId;
+      });
+
       const res = await api.post('/facebook/pages/bulk-apply-schedule', {
-        pageIds: selectedPageIds,
+        pageIds: resolvedPageIds,
       });
       if (res.data?.success) {
         ztteam_showToast(res.data.message || 'Áp dụng lịch 4 bài/ngày thành công!', 'success');

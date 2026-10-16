@@ -841,10 +841,13 @@ export class ZTTeamFacebookService {
       throw new BadRequestException('Vui lòng chọn Website WordPress đích');
     }
 
-    /** Kiểm tra quyền sở hữu các Page */
+    /** Kiểm tra quyền sở hữu các Page (chấp nhận cả Database UUID lẫn Facebook Page ID) */
     const pages = await this.prisma.ztteam_pages.findMany({
       where: {
-        id: { in: pageIds },
+        OR: [
+          { id: { in: pageIds } },
+          { fb_page_id: { in: pageIds } }
+        ],
         fb_account: { owner_user_id: userId }
       }
     });
@@ -901,7 +904,10 @@ export class ZTTeamFacebookService {
 
     const pages = await this.prisma.ztteam_pages.findMany({
       where: {
-        id: { in: pageIds },
+        OR: [
+          { id: { in: pageIds } },
+          { fb_page_id: { in: pageIds } }
+        ],
         fb_account: { owner_user_id: userId }
       },
       orderBy: { name: 'asc' }
