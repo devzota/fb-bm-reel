@@ -28,7 +28,7 @@ export class ZTTeamBgmService {
     }
 
     const files = fs.readdirSync(bgmDir);
-    const audioExts = ['.mp3', '.m4a', '.wav', '.aac', '.ogg'];
+    const audioExts = ['.mp3', '.m4a', '.wav', '.aac', '.ogg', '.mp4'];
 
     const items: ZTTeamBgmItem[] = [];
 
@@ -59,10 +59,10 @@ export class ZTTeamBgmService {
       }
     }
 
-    /** Ưu tiên kiss_of_spring.mp3 lên đầu nếu có */
+    /** Ưu tiên kiss_of_spring.mp4 lên đầu nếu có */
     items.sort((a, b) => {
-      if (a.filename === 'kiss_of_spring.mp3') return -1;
-      if (b.filename === 'kiss_of_spring.mp3') return 1;
+      if (a.filename === 'kiss_of_spring.mp4') return -1;
+      if (b.filename === 'kiss_of_spring.mp4') return 1;
       return a.name.localeCompare(b.name);
     });
 
@@ -77,11 +77,11 @@ export class ZTTeamBgmService {
       throw new BadRequestException('Vui lòng chọn file âm thanh để tải lên');
     }
 
-    const audioExts = ['.mp3', '.m4a', '.wav', '.aac', '.ogg'];
+    const audioExts = ['.mp3', '.m4a', '.wav', '.aac', '.ogg', '.mp4'];
     const originalExt = path.extname(file.originalname).toLowerCase();
 
     if (!audioExts.includes(originalExt)) {
-      throw new BadRequestException(`Định dạng file không hỗ trợ: ${originalExt}. Chỉ chấp nhận MP3, M4A, WAV, AAC.`);
+      throw new BadRequestException(`Định dạng file không hỗ trợ: ${originalExt}. Chỉ chấp nhận MP3, M4A, WAV, AAC, MP4.`);
     }
 
     const bgmDir = ztteam_getBgmPath();
@@ -142,6 +142,10 @@ export class ZTTeamBgmService {
 
   /**
    * ZTTeam: Lấy đường dẫn file BGM tuyệt đối để render video
+   * Mặc định ngẫu nhiên (random) trong đúng 3 bản nhạc tuyển chọn:
+   * 1. kiss_of_spring.mp4
+   * 2. summit.mp4
+   * 3. to_the_top.mp4
    */
   ztteam_resolveBgmPath(preferredFilename?: string | null): string {
     const bgmDir = ztteam_getBgmPath();
@@ -152,13 +156,23 @@ export class ZTTeamBgmService {
       if (fs.existsSync(p)) return p;
     }
 
-    /** 2. Mặc định ưu tiên kiss_of_spring.mp3 */
-    const kissSpring = path.join(bgmDir, 'kiss_of_spring.mp3');
-    if (fs.existsSync(kissSpring)) return kissSpring;
+    /** 2. Danh sách 3 file nhạc tuyển chọn mặc định */
+    const TOP_3_BGM = ['kiss_of_spring.mp4', 'summit.mp4', 'to_the_top.mp4'];
 
-    /** 3. Lấy ngẫu nhiên file có trong thư mục */
+    /** Kiểm tra các file khả dụng trong storage/bgm */
+    const availableTopBgm = TOP_3_BGM
+      .map(file => path.join(bgmDir, file))
+      .filter(fullPath => fs.existsSync(fullPath));
+
+    if (availableTopBgm.length > 0) {
+      const randIndex = Math.floor(Math.random() * availableTopBgm.length);
+      return availableTopBgm[randIndex];
+    }
+
+    /** 3. Fallback lấy bất kỳ file âm thanh nào trong thư mục storage/bgm */
     if (fs.existsSync(bgmDir)) {
-      const files = fs.readdirSync(bgmDir).filter(f => f.endsWith('.mp3') || f.endsWith('.m4a') || f.endsWith('.wav'));
+      const audioExts = ['.mp3', '.m4a', '.wav', '.aac', '.mp4'];
+      const files = fs.readdirSync(bgmDir).filter(f => audioExts.includes(path.extname(f).toLowerCase()));
       if (files.length > 0) {
         const rand = files[Math.floor(Math.random() * files.length)];
         return path.join(bgmDir, rand);
@@ -166,8 +180,11 @@ export class ZTTeamBgmService {
     }
 
     /** 4. Fallback về assets/bgm nếu storage chưa có */
-    const assetKiss = path.join(process.cwd(), 'assets', 'bgm', 'kiss_of_spring.mp3');
-    if (fs.existsSync(assetKiss)) return assetKiss;
+    const assetsBgmDir = path.join(process.cwd(), 'assets', 'bgm');
+    for (const file of TOP_3_BGM) {
+      const assetPath = path.join(assetsBgmDir, file);
+      if (fs.existsSync(assetPath)) return assetPath;
+    }
 
     throw new Error('Không tìm thấy bản nhạc nền BGM nào trong hệ thống');
   }

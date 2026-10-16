@@ -118,6 +118,22 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
     }
   };
 
+  /** ZTTeam: Format thời gian bài vừa đăng */
+  const ztteam_formatDateTime = (dateStr?: string | null) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const h = String(d.getHours()).padStart(2, '0');
+      const m = String(d.getMinutes()).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const mon = String(d.getMonth() + 1).padStart(2, '0');
+      return `${h}:${m} ${day}/${mon}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
   const postUrl = `https://facebook.com/${page.fb_page_id || page.id}`;
 
   return (
@@ -344,6 +360,26 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
                 </div>
               </div>
             )}
+          </div>
+
+          {/** ZTTeam: Bài viết vừa đăng gần nhất */}
+          <div className="p-2 rounded-lg bg-slate-800/30 border border-slate-700/40 flex items-start gap-2 text-[10px] shadow-sm shadow-black/20">
+            <span className="material-symbols-outlined text-[13px] text-emerald-400 shrink-0 mt-0.5">verified</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-fb-text-muted font-medium">Vừa đăng gần nhất:</span>
+                {page.lastPublishTime ? (
+                  <span className="font-mono text-[9px] text-emerald-400 font-bold shrink-0">
+                    {ztteam_formatDateTime(page.lastPublishTime)}
+                  </span>
+                ) : (
+                  <span className="text-[9px] text-slate-500 italic">Chưa có</span>
+                )}
+              </div>
+              <p className="text-fb-text font-bold text-[11px] truncate mt-0.5" title={page.lastPostTitle || 'Chưa có bài đăng'}>
+                {page.lastPostTitle ? ztteam_decodeHtmlEntity(page.lastPostTitle) : 'Chưa có bài đăng nào'}
+              </p>
+            </div>
           </div>
 
           {/** Cảnh báo nếu chưa hoàn thiện cấu hình */}
@@ -1355,7 +1391,7 @@ export default function FacebookPages() {
         </div>
       )}
 
-      {/** MODAL ÁP DỤNG LỊCH ĐĂNG 4 BÀI/NGÀY (RẢI 6 CỤM LỆCH 20 PHÚT) */}
+      {/** MODAL ÁP DỤNG LỊCH ĐĂNG 4 BÀI/NGÀY (RẢI LỆCH 2 PHÚT TỪNG PAGE) */}
       {isBulkScheduleModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-fb-surface w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-5 border border-slate-700/60 flex flex-col max-h-[90vh] overflow-y-auto">
@@ -1366,7 +1402,7 @@ export default function FacebookPages() {
                 </div>
                 <div>
                   <h3 className="font-black text-lg text-fb-text">Lịch Đăng Chuẩn 4 Bài/Ngày</h3>
-                  <p className="text-xs text-fb-text-muted">Tự động chia 6 Cụm lệch nhau chuẩn 20 phút cho <b className="text-emerald-400">{selectedPageIds.length} Fanpage</b></p>
+                  <p className="text-xs text-fb-text-muted">Tự động rải lệch 2 phút/page cho <b className="text-emerald-400">{selectedPageIds.length} Fanpage</b> (100% không trùng phút)</p>
                 </div>
               </div>
               <button
@@ -1381,17 +1417,17 @@ export default function FacebookPages() {
               <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-xs space-y-1">
                 <p className="font-bold flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-sm">verified</span>
-                  Thuật toán Rải Giờ Chống Spam Facebook:
+                  Thuật toán Rải Lệch Phút Tự Nhiên (2 phút/Page):
                 </p>
                 <p className="text-[11px] text-emerald-200/80">
-                  {selectedPageIds.length} Fanpage sẽ được chia đều vào 6 cụm giờ vàng (có khung Rạng Sáng 05:00 - 06:40 để đón sóng đọc sớm). Các cụm lệch nhau đúng 20 phút để triệt tiêu nguy cơ nghẽn API hoặc bị Facebook đánh dấu bão request.
+                  {selectedPageIds.length} Fanpage sẽ được gán các mốc giờ lệch nhau đúng 2 phút. Không bao giờ có 2 Fanpage nào trùng mốc phút với nhau, giúp mô phỏng hoạt động đăng bài thủ công hoàn hảo và an toàn tuyệt đối trước thuật toán Facebook.
                 </p>
               </div>
 
-              {/** Bảng xem trước 6 cụm */}
+              {/** Bảng xem trước các slot lệch phút */}
               <div className="border border-slate-700/60 rounded-2xl overflow-hidden">
                 <div className="grid grid-cols-5 p-2.5 bg-slate-800/60 font-bold text-slate-300 text-[11px] border-b border-slate-700/60">
-                  <span>Cụm Page</span>
+                  <span>Thứ tự Slot</span>
                   <span>1. Rạng Sáng</span>
                   <span>2. Buổi Trưa</span>
                   <span>3. Buổi Chiều</span>
@@ -1399,46 +1435,46 @@ export default function FacebookPages() {
                 </div>
                 <div className="divide-y divide-slate-800 text-[11px]">
                   <div className="grid grid-cols-5 p-2 bg-slate-900/40 items-center">
-                    <span className="font-bold text-blue-400">Cụm 1</span>
+                    <span className="font-bold text-blue-400">Page 1 (+0p)</span>
                     <span className="font-mono text-emerald-400 font-bold">05:00</span>
                     <span className="font-mono text-slate-300">11:30</span>
                     <span className="font-mono text-slate-300">16:30</span>
                     <span className="font-mono text-slate-300">20:00</span>
                   </div>
                   <div className="grid grid-cols-5 p-2 bg-slate-900/20 items-center">
-                    <span className="font-bold text-blue-400">Cụm 2</span>
-                    <span className="font-mono text-emerald-400 font-bold">05:20</span>
-                    <span className="font-mono text-slate-300">11:50</span>
-                    <span className="font-mono text-slate-300">16:50</span>
-                    <span className="font-mono text-slate-300">20:20</span>
+                    <span className="font-bold text-blue-400">Page 2 (+2p)</span>
+                    <span className="font-mono text-emerald-400 font-bold">05:02</span>
+                    <span className="font-mono text-slate-300">11:32</span>
+                    <span className="font-mono text-slate-300">16:32</span>
+                    <span className="font-mono text-slate-300">20:02</span>
                   </div>
                   <div className="grid grid-cols-5 p-2 bg-slate-900/40 items-center">
-                    <span className="font-bold text-blue-400">Cụm 3</span>
-                    <span className="font-mono text-emerald-400 font-bold">05:40</span>
-                    <span className="font-mono text-slate-300">12:10</span>
-                    <span className="font-mono text-slate-300">17:10</span>
-                    <span className="font-mono text-slate-300">20:40</span>
+                    <span className="font-bold text-blue-400">Page 3 (+4p)</span>
+                    <span className="font-mono text-emerald-400 font-bold">05:04</span>
+                    <span className="font-mono text-slate-300">11:34</span>
+                    <span className="font-mono text-slate-300">16:34</span>
+                    <span className="font-mono text-slate-300">20:04</span>
                   </div>
                   <div className="grid grid-cols-5 p-2 bg-slate-900/20 items-center">
-                    <span className="font-bold text-blue-400">Cụm 4</span>
-                    <span className="font-mono text-emerald-400 font-bold">06:00</span>
-                    <span className="font-mono text-slate-300">12:30</span>
-                    <span className="font-mono text-slate-300">17:30</span>
-                    <span className="font-mono text-slate-300">21:00</span>
+                    <span className="font-bold text-blue-400">Page 4 (+6p)</span>
+                    <span className="font-mono text-emerald-400 font-bold">05:06</span>
+                    <span className="font-mono text-slate-300">11:36</span>
+                    <span className="font-mono text-slate-300">16:36</span>
+                    <span className="font-mono text-slate-300">20:06</span>
                   </div>
                   <div className="grid grid-cols-5 p-2 bg-slate-900/40 items-center">
-                    <span className="font-bold text-blue-400">Cụm 5</span>
-                    <span className="font-mono text-emerald-400 font-bold">06:20</span>
-                    <span className="font-mono text-slate-300">12:50</span>
-                    <span className="font-mono text-slate-300">17:50</span>
-                    <span className="font-mono text-slate-300">21:20</span>
+                    <span className="font-bold text-blue-400">Page 5 (+8p)</span>
+                    <span className="font-mono text-emerald-400 font-bold">05:08</span>
+                    <span className="font-mono text-slate-300">11:38</span>
+                    <span className="font-mono text-slate-300">16:38</span>
+                    <span className="font-mono text-slate-300">20:08</span>
                   </div>
                   <div className="grid grid-cols-5 p-2 bg-slate-900/20 items-center">
-                    <span className="font-bold text-blue-400">Cụm 6</span>
-                    <span className="font-mono text-emerald-400 font-bold">06:40</span>
-                    <span className="font-mono text-slate-300">13:10</span>
-                    <span className="font-mono text-slate-300">18:10</span>
-                    <span className="font-mono text-slate-300">21:40</span>
+                    <span className="font-bold text-slate-400">Page n (+2p)...</span>
+                    <span className="font-mono text-emerald-400 font-bold">05:xx</span>
+                    <span className="font-mono text-slate-300">11:xx</span>
+                    <span className="font-mono text-slate-300">16:xx</span>
+                    <span className="font-mono text-slate-300">20:xx</span>
                   </div>
                 </div>
               </div>

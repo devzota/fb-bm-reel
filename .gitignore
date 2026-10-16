@@ -13,6 +13,7 @@ apps/api/storage/images/
 apps/api/storage/youtube/
 apps/api/uploads/
 *.mp4
+!apps/api/assets/bgm/*.mp4
 *.zip
 *.tar.gz
 

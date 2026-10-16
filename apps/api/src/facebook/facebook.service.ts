@@ -519,8 +519,10 @@ export class ZTTeamFacebookService {
     });
 
     let lastPublishTime = lastPublishedReel ? lastPublishedReel.updated_at : null;
+    let lastPostTitle = lastPublishedReel?.wp_post_title || lastPublishedReel?.ai_caption || null;
     if (lastPublishedImage?.posted_at && (!lastPublishTime || lastPublishedImage.posted_at > lastPublishTime)) {
       lastPublishTime = lastPublishedImage.posted_at;
+      lastPostTitle = lastPublishedImage.wp_post_title || lastPublishedImage.ai_caption || null;
     }
     
     let nextPublishTime = null;
@@ -595,6 +597,7 @@ export class ZTTeamFacebookService {
       lastRenderTime,
       nextRenderTime,
       lastPublishTime,
+      lastPostTitle,
       nextPublishTime,
       nextVideoTitle: nextReelToPublish ? (nextReelToPublish.wp_post_title || 'Video AI') : null,
       templateName
@@ -682,6 +685,8 @@ export class ZTTeamFacebookService {
         sourcesCount: activeSources.length,
         sourceWebs,
         primarySourceWeb: sourceWebs[0] || null,
+        lastPublishTime: times.lastPublishTime,
+        lastPostTitle: times.lastPostTitle,
         pendingImagesCount,
         pendingReelsCount,
         totalPendingCount: pendingImagesCount + pendingReelsCount,
@@ -939,26 +944,30 @@ export class ZTTeamFacebookService {
       throw new BadRequestException('Không tìm thấy Fanpage hợp lệ');
     }
 
-    /** 6 Cụm giờ vàng chuẩn (Kèm Khung Rạng Sáng 05:00 - 06:40, lệch 20 phút) */
-    const ZTTEAM_GOLDEN_BATCHES = [
-      { batchIndex: 1, name: 'Cụm 1', times: ['05:00', '11:30', '16:30', '20:00'] },
-      { batchIndex: 2, name: 'Cụm 2', times: ['05:20', '11:50', '16:50', '20:20'] },
-      { batchIndex: 3, name: 'Cụm 3', times: ['05:40', '12:10', '17:10', '20:40'] },
-      { batchIndex: 4, name: 'Cụm 4', times: ['06:00', '12:30', '17:30', '21:00'] },
-      { batchIndex: 5, name: 'Cụm 5', times: ['06:20', '12:50', '17:50', '21:20'] },
-      { batchIndex: 6, name: 'Cụm 6', times: ['06:40', '13:10', '18:10', '21:40'] },
-    ];
+    /** 4 Khung giờ vàng chuẩn (Khung Rạng Sáng 05:00, Trưa 11:30, Chiều 16:30, Tối 20:00) */
+    const BASE_GOLDEN_TIMES = ['05:00', '11:30', '16:30', '20:00'];
+
+    /** Hàm cộng dồn số phút vào mốc giờ chuẩn */
+    const addMinutesToTime = (baseTime: string, addMins: number): string => {
+      const [h, m] = baseTime.split(':').map(Number);
+      const total = h * 60 + m + addMins;
+      const newH = Math.floor(total / 60) % 24;
+      const newM = total % 60;
+      return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+    };
 
     const results: any[] = [];
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
-      const batch = ZTTEAM_GOLDEN_BATCHES[i % ZTTEAM_GOLDEN_BATCHES.length];
+      /** Mỗi page lệch nhau đúng 2 phút (Page 0: +0p, Page 1: +2p, Page 2: +4p,...) */
+      const offsetMinutes = i * 2;
+      const staggeredTimes = BASE_GOLDEN_TIMES.map(t => addMinutesToTime(t, offsetMinutes));
 
       await this.prisma.ztteam_pages.update({
         where: { id: page.id },
         data: {
           schedule_mode: 'fixed',
-          schedule_fixed_times: batch.times,
+          schedule_fixed_times: staggeredTimes,
           auto_publish_enabled: true
         }
       });
@@ -966,17 +975,17 @@ export class ZTTeamFacebookService {
       results.push({
         pageId: page.id,
         pageName: page.name,
-        batchName: batch.name,
-        times: batch.times
+        slotIndex: i + 1,
+        offsetMinutes,
+        times: staggeredTimes
       });
     }
 
     return {
       success: true,
       count: pages.length,
-      message: `Đã áp dụng Lịch Đăng Chuẩn 4 Bài/Ngày (Rải 20 Phút) cho ${pages.length} Fanpage thành công!`,
-      details: results,
-      batches: ZTTEAM_GOLDEN_BATCHES
+      message: `Đã áp dụng Lịch Đăng 4 Bài/Ngày rải lệch 2 phút cá nhân hóa cho ${pages.length} Fanpage thành công! (100% không trùng phút)`,
+      details: results
     };
   }
 
