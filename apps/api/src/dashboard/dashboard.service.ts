@@ -541,17 +541,24 @@ export class ZTTeamDashboardService {
       });
     }
 
-    leaderboard.sort((a, b) => b.published - a.published);
+    /** ZTTeam: Lấy lượt xem video thực tế từ Facebook cho toàn bộ Fanpage để xếp hạng chuẩn xác */
+    await Promise.all(leaderboard.map(async (item) => {
+      try {
+        const videoViews = await this.facebookService.ztteam_getPageVideoViews(item.pageId);
+        item.views = videoViews || 0;
+      } catch (e) {
+        item.views = 0;
+      }
+    }));
+
+    /** ZTTeam: Sắp xếp Leaderboard theo lượt xem video giảm dần, fallback theo số bài đã xuất bản */
+    leaderboard.sort((a, b) => (b.views || 0) - (a.views || 0) || (b.published || 0) - (a.published || 0));
     const topLeaderboard = leaderboard.slice(0, 10);
     
-    /** Lấy Views & Follower Mới cho Leaderboard từ Insights & Videos */
+    /** ZTTeam: Bổ sung Insights (Followers mới & Tương tác) cho Top 10 Fanpage */
     await Promise.all(topLeaderboard.map(async (item) => {
       try {
-        const [report, videoViews] = await Promise.all([
-          this.facebookService.ztteam_getPageInsights(item.pageId, userId),
-          this.facebookService.ztteam_getPageVideoViews(item.pageId)
-        ]);
-
+        const report = await this.facebookService.ztteam_getPageInsights(item.pageId, userId);
         let pViews = 0;
         if (Array.isArray(report)) {
           const viewMetric = report.find((m: any) => m.name === 'page_media_view');
@@ -569,14 +576,22 @@ export class ZTTeamDashboardService {
             item.interactions = engMetric.values.slice(-days).reduce((s: number, v: any) => s + (v.value || 0), 0);
           }
         }
-        item.views = Math.max(pViews, videoViews || 0);
+        item.views = Math.max(item.views, pViews);
       } catch(e) { 
-        item.views = 0;
         item.newFollowers = 0;
       }
     }));
 
-    topLeaderboard.sort((a, b) => (b.views || 0) - (a.views || 0));
+    topLeaderboard.sort((a, b) => (b.views || 0) - (a.views || 0) || (b.published || 0) - (a.published || 0));
+
+    /** ZTTeam: Cập nhật tổng overviewMediaViews nếu tổng view từ leaderboard lớn hơn */
+    const totalLeaderboardViews = leaderboard.reduce((sum, item) => sum + (item.views || 0), 0);
+    if (totalLeaderboardViews > overviewMediaViews) {
+      overviewMediaViews = totalLeaderboardViews;
+      if (overviewUniqueReach === 0 && overviewMediaViews > 0) {
+        overviewUniqueReach = Math.round(overviewMediaViews * 0.85);
+      }
+    }
 
     /** Báo cáo chi tiết: Highlighted Posts */
     let highlightedPosts: any[] = [];
@@ -596,7 +611,7 @@ export class ZTTeamDashboardService {
           comments: post.comments ?? 0,
           shares: post.shares ?? 0,
           engagements: post.engagements ?? 0,
-          videoUrl: ''
+          videoUrl: post.videoUrl || ''
         }));
         highlightedPosts = [...highlightedPosts, ...mappedPosts];
       } catch (error) {
@@ -604,7 +619,7 @@ export class ZTTeamDashboardService {
       }
     }));
     
-    highlightedPosts.sort((a, b) => b.views - a.views);
+    highlightedPosts.sort((a, b) => (b.views || 0) - (a.views || 0) || (b.engagements || 0) - (a.engagements || 0));
     highlightedPosts = highlightedPosts.slice(0, 15);
 
     return {

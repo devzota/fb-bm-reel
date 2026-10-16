@@ -1129,7 +1129,7 @@ export class ZTTeamFacebookService {
             `https://graph.facebook.com/${this.API_VERSION}/${realFbPageId}/published_posts`,
             {
               params: {
-                fields: 'id,message,created_time,full_picture,reactions.summary(true),comments.summary(true),shares',
+                fields: 'id,message,created_time,full_picture,attachments{media_type,target,type,url},reactions.summary(true),comments.summary(true),shares',
                 limit: 50,
                 access_token: page.page_token_encrypted
               }
@@ -1143,7 +1143,7 @@ export class ZTTeamFacebookService {
             `https://graph.facebook.com/${this.API_VERSION}/${realFbPageId}/published_posts`,
             {
               params: {
-                fields: 'id,message,created_time,full_picture',
+                fields: 'id,message,created_time,full_picture,attachments{media_type,target,type,url}',
                 limit: 50,
                 access_token: page.page_token_encrypted
               }
@@ -1227,20 +1227,27 @@ export class ZTTeamFacebookService {
           /** Ignore insight error */
         }
 
-        /** Lượt xem video/reel chuẩn từ node video */
+        /** Lượt xem video/reel chuẩn từ node video: kiểm tra qua target.id của attachments hoặc fallback post.id */
         let videoViews = 0;
-        for (const vId in videoViewsMap) {
-          if (post.id && post.id.includes(vId)) {
-            videoViews = videoViewsMap[vId];
-            break;
+        const targetVideoId = post.attachments?.data?.[0]?.target?.id;
+        if (targetVideoId && videoViewsMap[targetVideoId] !== undefined) {
+          videoViews = videoViewsMap[targetVideoId];
+        } else {
+          for (const vId in videoViewsMap) {
+            if (post.id && post.id.includes(vId)) {
+              videoViews = videoViewsMap[vId];
+              break;
+            }
           }
         }
+
+        const videoUrl = post.attachments?.data?.[0]?.target?.url || post.attachments?.data?.[0]?.url || '';
 
         /** Tổng tương tác chuẩn Meta DOC: Cảm xúc + Lượt nhấp + Bình luận + Chia sẻ */
         const engagements = reactionsCount + clicks + commentsCount + sharesCount;
 
         /** Lượt xem (Impressions): Sử dụng post_media_view (nếu có), nếu video thì kết hợp videoViews */
-        let views = mediaViews > 0 ? mediaViews : (videoViews > 0 ? videoViews : (insightsVideoViews > 0 ? insightsVideoViews : (photoViews > 0 ? photoViews : clicks)));
+        let views = Math.max(mediaViews, videoViews, insightsVideoViews, photoViews, clicks);
 
         /** Người xem (Reach): Sử dụng post_total_media_view_unique (nếu có) */
         let reach = mediaViewsUnique > 0 ? mediaViewsUnique : views;
@@ -1265,12 +1272,13 @@ export class ZTTeamFacebookService {
           reactions: reactionsCount,
           comments: commentsCount,
           shares: sharesCount,
-          engagements
+          engagements,
+          videoUrl
         };
       }));
 
-      /** Sắp xếp theo tương tác giảm dần */
-      posts.sort((a, b) => b.engagements - a.engagements);
+      /** Sắp xếp ưu tiên theo lượt xem giảm dần, nếu bằng nhau thì theo tương tác */
+      posts.sort((a, b) => (b.views || 0) - (a.views || 0) || (b.engagements || 0) - (a.engagements || 0));
 
       /** Lấy URL bài gốc để hiển thị trên frontend */
       try {
