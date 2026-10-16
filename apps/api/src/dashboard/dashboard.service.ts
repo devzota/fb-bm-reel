@@ -293,7 +293,7 @@ export class ZTTeamDashboardService {
     
     let pages = await this.prisma.ztteam_pages.findMany({
       where: { fb_account_id: { in: accountIds }, is_active: true },
-      select: { id: true, name: true, avatar: true, fb_page_id: true, page_token_encrypted: true, follower_count: true },
+      select: { id: true, name: true, avatar: true, branding_avatar_url: true, fb_page_id: true, page_token_encrypted: true, follower_count: true },
     });
 
     /** Apply siteId filter if selected */
@@ -349,47 +349,12 @@ export class ZTTeamDashboardService {
 
     const allPageNames = pages.map(p => p.name);
 
-    /** Aggregate Facebook Insights Metrics & Realtime Video Views across selected pages */
+    /** Khởi tạo các biến tổng quan */
     let overviewMediaViews = 0;
     let overviewUniqueReach = 0;
     let overviewEngagements = 0;
     let overviewNewFollowers = 0;
     const totalFollowers = pages.reduce((sum, p) => sum + (p.follower_count || 0), 0);
-
-    await Promise.all(pages.slice(0, 15).map(async (p) => {
-      try {
-        const [report, videoViews] = await Promise.all([
-          this.facebookService.ztteam_getPageInsights(p.id, userId),
-          this.facebookService.ztteam_getPageVideoViews(p.id)
-        ]);
-
-        let pViews = 0;
-        if (Array.isArray(report)) {
-          const viewMetric = report.find((m: any) => m.name === 'page_media_view');
-          if (viewMetric?.values) {
-            pViews = viewMetric.values.slice(-days).reduce((s: number, v: any) => s + (v.value || 0), 0);
-          }
-          const reachMetric = report.find((m: any) => m.name === 'page_total_media_view_unique');
-          if (reachMetric?.values) {
-            overviewUniqueReach += reachMetric.values.slice(-days).reduce((s: number, v: any) => s + (v.value || 0), 0);
-          }
-          const engMetric = report.find((m: any) => m.name === 'page_post_engagements');
-          if (engMetric?.values) {
-            overviewEngagements += engMetric.values.slice(-days).reduce((s: number, v: any) => s + (v.value || 0), 0);
-          }
-          const followMetric = report.find((m: any) => m.name === 'page_daily_follows');
-          if (followMetric?.values) {
-            overviewNewFollowers += followMetric.values.slice(-7).reduce((s: number, v: any) => s + (v.value || 0), 0);
-          }
-        }
-
-        const effectiveViews = Math.max(pViews, videoViews || 0);
-        overviewMediaViews += effectiveViews;
-        if (overviewUniqueReach === 0 && effectiveViews > 0) {
-          overviewUniqueReach = Math.round(effectiveViews * 0.85);
-        }
-      } catch (e) { /* ignore */ }
-    }));
 
     const chartData = [];
 
@@ -500,127 +465,192 @@ export class ZTTeamDashboardService {
       chartData.push(dataPoint);
     }
 
-    const leaderboard = [];
-    for (const page of pages) {
-      const [pageReels, pageImages] = await Promise.all([
-        this.prisma.ztteam_reels.groupBy({
-          by: ['status', 'is_posted'],
-          where: { page_id: page.id, OR: [{ is_posted: true }, { status: 'FAILED' }] },
-          _count: { id: true }
-        }),
-        this.prisma.ztteam_images.groupBy({
-          by: ['status', 'is_posted'],
-          where: { page_id: page.id, OR: [{ is_posted: true }, { status: 'FAILED' }] },
-          _count: { id: true }
-        }),
-      ]);
-      let published = 0;
-      let failed = 0;
-      pageReels.forEach(r => {
-        if (r.is_posted) published += r._count.id;
-        if (r.status === 'FAILED') failed += r._count.id;
-      });
-      pageImages.forEach(img => {
-        if (img.is_posted) published += img._count.id;
-        if (img.status === 'FAILED') failed += img._count.id;
-      });
+    /** ZTTeam: 1. Lấy tất cả bài viết do chính hệ thống tạo và đăng trong khoảng thời gian đã chọn */
+    const startDate = new Date(Date.now() - days * 86400 * 1000);
 
-      leaderboard.push({
-        pageId: page.id,
-        pageName: page.name,
-        avatar: page.avatar,
-        totalReels: published + failed,
-        published,
-        rate: published + failed > 0 ? Math.round((published / (published + failed)) * 100) : 100,
-        fbPageId: page.fb_page_id,
-        pageToken: page.page_token_encrypted,
-        interactions: 0,
-        views: 0,
-        followers: page.follower_count || 0,
-        newFollowers: 0
-      });
-    }
+    const [systemImages, systemReels] = await Promise.all([
+      this.prisma.ztteam_images.findMany({
+        where: {
+          page_id: { in: pageIds },
+          is_posted: true,
+          fb_post_id: { not: null },
+          posted_at: { gte: startDate },
+        },
+        select: {
+          id: true,
+          page_id: true,
+          fb_post_id: true,
+          wp_post_title: true,
+          image_url: true,
+          video_url: true,
+          posted_at: true,
+        },
+      }),
+      this.prisma.ztteam_reels.findMany({
+        where: {
+          page_id: { in: pageIds },
+          is_posted: true,
+          fb_post_id: { not: null },
+          posted_at: { gte: startDate },
+        },
+        select: {
+          id: true,
+          page_id: true,
+          fb_post_id: true,
+          wp_post_title: true,
+          thumbnail_url: true,
+          video_url: true,
+          posted_at: true,
+        },
+      }),
+    ]);
 
-    /** ZTTeam: Lấy lượt xem video thực tế từ Facebook cho toàn bộ Fanpage để xếp hạng chuẩn xác */
-    await Promise.all(leaderboard.map(async (item) => {
-      try {
-        const videoViews = await this.facebookService.ztteam_getPageVideoViews(item.pageId);
-        item.views = videoViews || 0;
-      } catch (e) {
-        item.views = 0;
+    const pageToSystemPostIds = new Map<string, Set<string>>();
+    const systemPostsByFbId = new Map<string, any>();
+
+    [...systemImages, ...systemReels].forEach((p) => {
+      if (p.page_id && p.fb_post_id) {
+        if (!pageToSystemPostIds.has(p.page_id)) {
+          pageToSystemPostIds.set(p.page_id, new Set());
+        }
+        pageToSystemPostIds.get(p.page_id)!.add(p.fb_post_id);
+        systemPostsByFbId.set(p.fb_post_id, p);
       }
-    }));
+    });
 
-    /** ZTTeam: Sắp xếp Leaderboard theo lượt xem video giảm dần, fallback theo số bài đã xuất bản */
-    leaderboard.sort((a, b) => (b.views || 0) - (a.views || 0) || (b.published || 0) - (a.published || 0));
-    const topLeaderboard = leaderboard.slice(0, 10);
-    
-    /** ZTTeam: Bổ sung Insights (Followers mới & Tương tác) cho Top 10 Fanpage */
-    await Promise.all(topLeaderboard.map(async (item) => {
-      try {
-        const report = await this.facebookService.ztteam_getPageInsights(item.pageId, userId);
-        let pViews = 0;
-        if (Array.isArray(report)) {
-          const viewMetric = report.find((m: any) => m.name === 'page_media_view');
-          if (viewMetric?.values) {
-            pViews = viewMetric.values.slice(-days).reduce((s: number, v: any) => s + (v.value || 0), 0);
+    const leaderboard: any[] = [];
+    const allSystemVideoObjects: any[] = [];
+
+    await Promise.all(
+      pages.map(async (page) => {
+        /** Lấy sản lượng của page */
+        const [pageReels, pageImages] = await Promise.all([
+          this.prisma.ztteam_reels.groupBy({
+            by: ['status', 'is_posted'],
+            where: { page_id: page.id, OR: [{ is_posted: true }, { status: 'FAILED' }] },
+            _count: { id: true },
+          }),
+          this.prisma.ztteam_images.groupBy({
+            by: ['status', 'is_posted'],
+            where: { page_id: page.id, OR: [{ is_posted: true }, { status: 'FAILED' }] },
+            _count: { id: true },
+          }),
+        ]);
+
+        let published = 0;
+        let failed = 0;
+        pageReels.forEach((r) => {
+          if (r.is_posted) published += r._count.id;
+          if (r.status === 'FAILED') failed += r._count.id;
+        });
+        pageImages.forEach((img) => {
+          if (img.is_posted) published += img._count.id;
+          if (img.status === 'FAILED') failed += img._count.id;
+        });
+
+        const sysPostIds = pageToSystemPostIds.get(page.id) || new Set<string>();
+        let pageViews = 0;
+        let pageReach = 0;
+        let pageNewFollowers = 0;
+        let pageInteractions = 0;
+
+        /** Truy vấn video views CHỈ cho các bài do hệ thống đăng */
+        if (page.page_token_encrypted && page.fb_page_id) {
+          try {
+            const vidUrl = new URL(`https://graph.facebook.com/v25.0/${page.fb_page_id}/videos`);
+            vidUrl.searchParams.set('fields', 'id,views,created_time,description,picture,permalink_url');
+            vidUrl.searchParams.set('limit', '100');
+            vidUrl.searchParams.set('access_token', page.page_token_encrypted);
+
+            const vidRes = await fetch(vidUrl.toString());
+            const vidData = await vidRes.json();
+            const videos = vidData?.data || [];
+
+            for (const v of videos) {
+              if (sysPostIds.has(v.id)) {
+                const vViews = Number(v.views) || 0;
+                pageViews += vViews;
+
+                const sysPost = systemPostsByFbId.get(v.id);
+                allSystemVideoObjects.push({
+                  id: v.id,
+                  title: sysPost?.wp_post_title || v.description?.slice(0, 100) || 'Video do hệ thống đăng',
+                  thumbnail: sysPost?.thumbnail_url || sysPost?.image_url || v.picture || 'https://placehold.co/1080x1920/2563eb/white?text=ZTTeam',
+                  pageName: page.name,
+                  date: v.created_time || sysPost?.posted_at,
+                  views: vViews,
+                  reactions: 0,
+                  comments: 0,
+                  shares: 0,
+                  engagements: vViews,
+                  videoUrl: v.permalink_url ? `https://facebook.com${v.permalink_url}` : `https://facebook.com/${v.id}`,
+                });
+              }
+            }
+          } catch (vidErr: any) {
+            this.logger.warn(`Lỗi lấy video views cho ${page.name}: ${vidErr.message}`);
           }
-          const followMetric = report.find((m: any) => m.name === 'page_daily_follows');
-          if (followMetric?.values) {
-            item.newFollowers = followMetric.values.slice(-7).reduce((s: number, v: any) => s + (v.value || 0), 0);
-          } else {
-            item.newFollowers = 0;
-          }
-          const engMetric = report.find((m: any) => m.name === 'page_post_engagements');
-          if (engMetric?.values) {
-            item.interactions = engMetric.values.slice(-days).reduce((s: number, v: any) => s + (v.value || 0), 0);
+
+          /** Lấy insights: Reach, Follower mới, Tương tác */
+          try {
+            const report = await this.facebookService.ztteam_getPageInsights(page.id, userId);
+            if (Array.isArray(report)) {
+              const reachMetric = report.find((m: any) => m.name === 'page_total_media_view_unique');
+              if (reachMetric?.values) {
+                pageReach = reachMetric.values.slice(-days).reduce((s: number, v: any) => s + (v.value || 0), 0);
+              }
+              const followMetric = report.find((m: any) => m.name === 'page_daily_follows');
+              if (followMetric?.values) {
+                pageNewFollowers = followMetric.values.slice(-days).reduce((s: number, v: any) => s + (v.value || 0), 0);
+              }
+              const engMetric = report.find((m: any) => m.name === 'page_post_engagements');
+              if (engMetric?.values) {
+                pageInteractions = engMetric.values.slice(-days).reduce((s: number, v: any) => s + (v.value || 0), 0);
+              }
+            }
+          } catch (insErr: any) {
+            this.logger.warn(`Lỗi lấy insights cho ${page.name}: ${insErr.message}`);
           }
         }
-        item.views = Math.max(item.views, pViews);
-      } catch(e) { 
-        item.newFollowers = 0;
-      }
-    }));
 
-    topLeaderboard.sort((a, b) => (b.views || 0) - (a.views || 0) || (b.published || 0) - (a.published || 0));
+        /** Fallback reach nếu Insight chưa kịp cập nhật nhưng video có lượt xem */
+        if (pageReach === 0 && pageViews > 0) {
+          pageReach = Math.round(pageViews * 0.85);
+        }
 
-    /** ZTTeam: Cập nhật tổng overviewMediaViews nếu tổng view từ leaderboard lớn hơn */
-    const totalLeaderboardViews = leaderboard.reduce((sum, item) => sum + (item.views || 0), 0);
-    if (totalLeaderboardViews > overviewMediaViews) {
-      overviewMediaViews = totalLeaderboardViews;
-      if (overviewUniqueReach === 0 && overviewMediaViews > 0) {
-        overviewUniqueReach = Math.round(overviewMediaViews * 0.85);
-      }
-    }
+        leaderboard.push({
+          pageId: page.id,
+          pageName: page.name,
+          avatar: (page as any).branding_avatar_url || page.avatar,
+          totalReels: published + failed,
+          published,
+          rate: published + failed > 0 ? Math.round((published / (published + failed)) * 100) : 100,
+          fbPageId: page.fb_page_id,
+          pageToken: page.page_token_encrypted,
+          interactions: pageInteractions,
+          views: pageViews,
+          reach: pageReach,
+          followers: page.follower_count || 0,
+          newFollowers: pageNewFollowers,
+          systemPostsCount: sysPostIds.size,
+        });
+      })
+    );
 
-    /** Báo cáo chi tiết: Highlighted Posts */
-    let highlightedPosts: any[] = [];
-    const activePages = topLeaderboard.slice(0, 5);
-    
-    await Promise.all(activePages.map(async (pageInfo) => {
-      try {
-        const topPosts = await this.facebookService.ztteam_getTopPosts(pageInfo.fbPageId, userId);
-        const mappedPosts = topPosts.map((post: any) => ({
-          id: post.id,
-          title: post.message || 'Không có tiêu đề',
-          thumbnail: post.full_picture || 'https://placehold.co/1080x1920/2563eb/white?text=No+Thumb',
-          pageName: pageInfo.pageName,
-          date: post.created_time,
-          views: post.views,
-          reactions: post.reactions ?? 0,
-          comments: post.comments ?? 0,
-          shares: post.shares ?? 0,
-          engagements: post.engagements ?? 0,
-          videoUrl: post.videoUrl || ''
-        }));
-        highlightedPosts = [...highlightedPosts, ...mappedPosts];
-      } catch (error) {
-        this.logger.warn(`Could not fetch top posts for page ${pageInfo.pageName}`);
-      }
-    }));
-    
-    highlightedPosts.sort((a, b) => (b.views || 0) - (a.views || 0) || (b.engagements || 0) - (a.engagements || 0));
-    highlightedPosts = highlightedPosts.slice(0, 15);
+    /** ZTTeam: Tạo 3 Bảng Xếp Hạng chuyên sâu theo từng tiêu chí */
+    const topByViews = [...leaderboard].sort((a, b) => (b.views || 0) - (a.views || 0) || (b.published || 0) - (a.published || 0));
+    const topByReach = [...leaderboard].sort((a, b) => (b.reach || 0) - (a.reach || 0) || (b.views || 0) - (a.views || 0));
+    const topByFollowers = [...leaderboard].sort((a, b) => (b.newFollowers || 0) - (a.newFollowers || 0) || (b.followers || 0) - (a.followers || 0));
+
+    /** ZTTeam: Tổng hợp số liệu tổng quan chuẩn chỉ từ các bài hệ thống đăng trong kỳ */
+    overviewMediaViews = topByViews.reduce((sum, item) => sum + (item.views || 0), 0);
+    overviewUniqueReach = topByReach.reduce((sum, item) => sum + (item.reach || 0), 0);
+    overviewNewFollowers = topByFollowers.reduce((sum, item) => sum + (item.newFollowers || 0), 0);
+    overviewEngagements = leaderboard.reduce((sum, item) => sum + (item.interactions || 0), 0);
+
+    /** ZTTeam: Danh sách video nổi bật do hệ thống đăng xếp theo lượt xem giảm dần */
+    allSystemVideoObjects.sort((a, b) => (b.views || 0) - (a.views || 0));
+    const highlightedPosts = allSystemVideoObjects.slice(0, 15);
 
     return {
       overview: {
@@ -628,11 +658,16 @@ export class ZTTeamDashboardService {
         totalUniqueReach: overviewUniqueReach,
         totalEngagements: overviewEngagements,
         totalFollowers,
-        newFollowers: overviewNewFollowers
+        newFollowers: overviewNewFollowers,
+        totalSystemPosts: [...systemImages, ...systemReels].length,
       },
       chartData,
+      leaderboard: topByViews.slice(0, 10),
+      topByViews,
+      topByReach,
+      topByFollowers,
+      highlightedPosts,
       details: highlightedPosts,
-      leaderboard: topLeaderboard
     };
   }
 }
