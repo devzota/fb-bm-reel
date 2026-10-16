@@ -459,6 +459,7 @@ export class ZTTeamFacebookService {
             fb_page_id: true,
             name: true,
             avatar: true,
+            branding_avatar_url: true,
             category: true,
             follower_count: true,
             is_active: true,
@@ -487,7 +488,7 @@ export class ZTTeamFacebookService {
         id: p.fb_page_id,
         internalId: p.id,
         name: p.name,
-        avatar: p.avatar,
+        avatar: (p as any).branding_avatar_url || p.avatar,
         category: p.category,
         followersCount: p.follower_count,
         isActive: p.is_active,
@@ -657,7 +658,7 @@ export class ZTTeamFacebookService {
         name: p.name,
         category: p.category,
         followersCount: p.follower_count,
-        avatar: p.avatar,
+        avatar: (p as any).branding_avatar_url || p.avatar,
         ownerName: p.fb_account.name,
         accountType: p.fb_account.account_type || 'SYSTEM_USER',
         businessId: p.fb_account.business_id,
@@ -2177,24 +2178,34 @@ export class ZTTeamFacebookService {
       recentTitles
     });
 
-    /** 3. Gọi tạo ảnh Avatar 1:1 (SangTao.ai hoặc tự động Fallback sang OpenAI DALL-E 3) */
+    /** 3. Gọi tạo ảnh Avatar 1:1 */
     this.logger.log(`Đang sinh Avatar 1:1 với prompt: ${prompts.avatarPrompt}`);
     const avatarResult = await this.ztteam_renderImageSmartFallback(prompts.avatarPrompt, '1:1');
 
-    /** 4. Gọi tạo ảnh Cover 16:9 (SangTao.ai hoặc tự động Fallback sang OpenAI DALL-E 3) */
-    this.logger.log(`Đang sinh Cover 16:9 với prompt: ${prompts.coverPrompt}`);
-    const coverResult = await this.ztteam_renderImageSmartFallback(prompts.coverPrompt, '16:9');
-
-    /** ZTTeam: Lưu ngay lập tức ảnh và prompt vừa tạo vào Database để F5 không bao giờ mất */
+    /** ZTTeam: Lưu ngay lập tức Avatar vào Database để nếu bước tạo Cover gặp lỗi thì Avatar vẫn an toàn */
     await this.prisma.ztteam_pages.update({
       where: { id: page.id },
       data: {
         branding_avatar_url: avatarResult.imageUrl,
         branding_avatar_prompt: prompts.avatarPrompt,
-        branding_cover_url: coverResult.imageUrl,
-        branding_cover_prompt: prompts.coverPrompt,
       } as any
     });
+
+    /** 4. Gọi tạo ảnh Cover 16:9 */
+    this.logger.log(`Đang sinh Cover 16:9 với prompt: ${prompts.coverPrompt}`);
+    let coverResult: any = null;
+    try {
+      coverResult = await this.ztteam_renderImageSmartFallback(prompts.coverPrompt, '16:9');
+      await this.prisma.ztteam_pages.update({
+        where: { id: page.id },
+        data: {
+          branding_cover_url: coverResult.imageUrl,
+          branding_cover_prompt: prompts.coverPrompt,
+        } as any
+      });
+    } catch (coverErr: any) {
+      this.logger.warn(`Lỗi tạo Ảnh bìa Cover cho Page ${page.name}: ${coverErr.message}`);
+    }
 
     return {
       success: true,
@@ -2204,11 +2215,11 @@ export class ZTTeamFacebookService {
       avatarUrl: avatarResult.imageUrl,
       avatarLocalPath: avatarResult.localPath,
       avatarPrompt: prompts.avatarPrompt,
-      coverUrl: coverResult.imageUrl,
-      coverLocalPath: coverResult.localPath,
+      coverUrl: coverResult?.imageUrl || null,
+      coverLocalPath: coverResult?.localPath || null,
       coverPrompt: prompts.coverPrompt,
       avatarEngine: avatarResult.engine,
-      coverEngine: coverResult.engine
+      coverEngine: coverResult?.engine || null
     };
   }
 
@@ -2466,6 +2477,10 @@ export class ZTTeamFacebookService {
         this.logger.error(`Lỗi cập nhật Ảnh bìa trên Facebook: ${err.response?.data?.error?.message || err.message}`);
         throw new BadRequestException(`Lỗi cập nhật Ảnh bìa Facebook: ${err.response?.data?.error?.message || err.message}`);
       }
+    }
+
+    if (!updatedAvatar && !updatedCover) {
+      throw new BadRequestException('Không tìm thấy file ảnh đại diện hoặc ảnh bìa hợp lệ để tải lên Facebook. Vui lòng bấm Tạo Bộ Nhận Diện trước.');
     }
 
     /** 3. Cập nhật URL Avatar & Cover mới trong cơ sở dữ liệu để Web Tool đồng bộ */
