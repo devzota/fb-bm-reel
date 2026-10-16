@@ -782,7 +782,7 @@ CRITICAL REQUIREMENTS:
   }
 
   /**
-   * ZTTeam: Sáng tạo prompt mỹ thuật chuyên nghiệp cho Avatar (1:1) và Cover (16:9) dựa trên Tên Page, Website nguồn và các bài viết gần nhất
+   * ZTTeam: Sáng tạo prompt chuẩn cho Avatar (1:1) và Cover (16:9) bám sát chủ đề Story và chèn tên Page vào cả 2 ảnh
    */
   async ztteam_generateBrandingPrompts(params: {
     pageName: string;
@@ -791,90 +791,22 @@ CRITICAL REQUIREMENTS:
     tags?: string[];
     recentTitles?: string[];
   }): Promise<{ avatarPrompt: string; coverPrompt: string }> {
-    const { pageName, category, siteUrl, tags, recentTitles } = params;
-    const settings = await this.getSettings();
+    const { pageName } = params;
 
-    const systemPrompt = `You are a world-class creative brand director and AI art prompt engineer specializing in Facebook Page visual identities.
-CRITICAL CONTEXT:
-This Facebook Page is dedicated entirely to the STORY niche (captivating stories, life chronicles, emotional dramas, deep human tales, mystery, and storytelling).
-Your task is to take the Page's Name, understand its artistic essence, and creatively imagine TWO cohesive, high-aesthetic image generation prompts (for an AI image generator like ChatGPT Image / DALL-E) specifically tailored for this story page.
+    /**
+     * ZTTeam: Cấu trúc câu lệnh chuẩn bám sát yêu cầu:
+     * - Page làm chuyên đề Story
+     * - Lấy tên Fanpage "${pageName}"
+     * - Chèn tên Page vào cả 2 ảnh theo phong cách typography nghệ thuật / tiêu đề thương hiệu
+     */
+    const avatarPrompt = `This Facebook page is dedicated to story content. Based on the page name "${pageName}", create a compelling 1:1 square avatar profile picture that represents the storytelling theme. Clearly and beautifully integrate the exact brand name text "${pageName}" in stylish, modern typography into the artwork, dramatic cinematic lighting, rich emotional atmosphere, 8k resolution, photorealistic.`;
 
-RULES FOR AVATAR PROMPT (Square 1:1, Profile Picture):
-- Represent the unique soul, vibe, or persona of this story page based on the page name and story theme.
-- High visual impact, modern aesthetic, centered composition, premium atmospheric lighting.
-- NO text, NO letters, NO words, NO typos inside the image (strictly visual art).
-- English prompt only, under 60 words.
+    const coverPrompt = `This Facebook page is dedicated to story content. Based on the page name "${pageName}", create a breathtaking cinematic 16:9 cover banner that captures the mood and atmosphere of this storytelling page. Prominently display the exact page title text "${pageName}" in bold, elegant cinematic typography across the banner, immersive atmospheric depth, rich storytelling lighting, 8k resolution.`;
 
-RULES FOR COVER PROMPT (Landscape 16:9, Banner):
-- A wide, cinematic, and immersive storytelling scene or atmosphere matching the mood and aesthetic of the avatar.
-- Keep the main focal point centered or toward the right side (leaving room on the bottom-left for the avatar profile badge on Facebook).
-- NO text, NO slogans, NO distorted letters.
-- Highly detailed, cinematic lighting, ultra-wide atmospheric depth.
-- English prompt only, under 80 words.
-
-OUTPUT FORMAT:
-You MUST return ONLY a valid JSON object with exactly these two keys:
-{
-  "avatarPrompt": "English prompt for Avatar...",
-  "coverPrompt": "English prompt for Cover..."
-}`;
-
-    const userPrompt = `Page Name: "${pageName}"
-Niche: Facebook Storytelling & Life Stories
-Category: ${category || 'Stories & Personal Narratives'}
-Connected Site / Source: ${siteUrl || 'N/A'}
-Niche Tags: ${tags && tags.length > 0 ? tags.join(', ') : 'Story, Life, Emotion'}
-Recent Story Topics / Titles:
-${recentTitles && recentTitles.length > 0 ? recentTitles.map(t => `- ${t}`).join('\n') : '- Compelling life stories and emotional chronicles'}
-
-Based on the Page Name "${pageName}" and the Story theme, let your AI creativity flow to generate the 2 cohesive art prompts now.`;
-
-    try {
-      let rawJson = '';
-      if (settings.activeProvider === 'gemini' && settings.geminiKey) {
-        const { GoogleGenerativeAI } = require('@google/generative-ai');
-        const genAI = new GoogleGenerativeAI(settings.geminiKey);
-        const model = genAI.getGenerativeModel({
-          model: 'gemini-1.5-flash',
-          generationConfig: { responseMimeType: 'application/json' },
-        });
-        const result = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
-        rawJson = result.response.text();
-      } else {
-        const OpenAI = require('openai').default;
-        const isDeepseek = settings.activeProvider === 'deepseek' && settings.deepseekKey;
-        const rawKey = isDeepseek ? settings.deepseekKey : settings.openaiKey;
-        const apiKey = (rawKey || '').trim();
-        const baseURL = isDeepseek ? 'https://api.deepseek.com' : undefined;
-        const modelName = isDeepseek ? 'deepseek-chat' : 'gpt-4o-mini';
-
-        if (!apiKey) throw new Error(`Missing API Key for ${settings.activeProvider}`);
-
-        const openai = new OpenAI({ apiKey, baseURL });
-        const response = await openai.chat.completions.create({
-          model: modelName,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-          ],
-          temperature: 0.8,
-        });
-        rawJson = response.choices[0]?.message?.content || '{}';
-      }
-
-      const parsed = JSON.parse(rawJson);
-      return {
-        avatarPrompt: parsed.avatarPrompt || `Artistic storytelling visual identity for ${pageName}, modern evocative aesthetic, cinematic atmospheric lighting, 8k render, no text`,
-        coverPrompt: parsed.coverPrompt || `Breathtaking cinematic wide story atmosphere for ${pageName}, immersive narrative mood, rich lighting, 8k resolution, no text`,
-      };
-    } catch (err: any) {
-      this.logger.error(`Error generating branding prompts: ${err.message}`);
-      return {
-        avatarPrompt: `Artistic storytelling visual identity for ${pageName}, modern evocative aesthetic, cinematic atmospheric lighting, 8k render, no text`,
-        coverPrompt: `Breathtaking cinematic wide story atmosphere for ${pageName}, immersive narrative mood, rich lighting, 8k resolution, no text`,
-      };
-    }
+    return {
+      avatarPrompt,
+      coverPrompt,
+    };
   }
 
   /**
