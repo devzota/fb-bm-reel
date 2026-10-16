@@ -754,32 +754,6 @@ export class ZTTeamFacebookService {
       throw new Error('Fanpage không tồn tại hoặc bạn không có quyền');
     }
 
-    /** Kiểm tra trùng lặp giờ đăng cố định giữa các Fanpage */
-    if (config.schedule_mode === 'fixed' && config.schedule_fixed_times && config.schedule_fixed_times.length > 0) {
-      const otherPages = await this.prisma.ztteam_pages.findMany({
-        where: {
-          id: { not: page.id },
-          fb_account: { owner_user_id: userId },
-          schedule_mode: 'fixed'
-        }
-      });
-      
-      const usedTimes = new Set();
-      for (const p of otherPages) {
-        if (p.schedule_fixed_times && Array.isArray(p.schedule_fixed_times)) {
-          for (const time of p.schedule_fixed_times) {
-            usedTimes.add(time);
-          }
-        }
-      }
-      
-      for (const time of config.schedule_fixed_times) {
-        if (usedTimes.has(time)) {
-          throw new BadRequestException(`Giờ đăng ${time} đã được sử dụng ở một Fanpage khác. Vui lòng chọn khung giờ khác để tránh trùng lặp!`);
-        }
-      }
-    }
-
     /** Update main page fields */
     await this.prisma.ztteam_pages.update({
       where: { id: page.id },
@@ -848,6 +822,134 @@ export class ZTTeamFacebookService {
     }
 
     return { success: true };
+  }
+
+  /**
+   * ZTTeam: Gán Nguồn Cào Hàng Loạt cho nhiều Fanpage cùng lúc
+   */
+  async ztteam_bulkAssignSources(userId: string, data: {
+    pageIds: string[];
+    targetSiteId: string;
+    targetCategoryId?: string | null;
+    mode?: 'replace' | 'append';
+  }) {
+    const { pageIds, targetSiteId, targetCategoryId, mode = 'replace' } = data;
+    if (!pageIds || pageIds.length === 0) {
+      throw new BadRequestException('Vui lòng chọn ít nhất 1 Fanpage để gán nguồn');
+    }
+    if (!targetSiteId) {
+      throw new BadRequestException('Vui lòng chọn Website WordPress đích');
+    }
+
+    /** Kiểm tra quyền sở hữu các Page */
+    const pages = await this.prisma.ztteam_pages.findMany({
+      where: {
+        id: { in: pageIds },
+        fb_account: { owner_user_id: userId }
+      }
+    });
+
+    if (pages.length === 0) {
+      throw new BadRequestException('Không tìm thấy Fanpage hợp lệ');
+    }
+
+    let affectedCount = 0;
+    for (const page of pages) {
+      if (mode === 'replace') {
+        await this.prisma.ztteam_page_sources.deleteMany({
+          where: { page_id: page.id }
+        });
+      }
+
+      /** Kiểm tra nếu đã có source này chưa */
+      const existing = await this.prisma.ztteam_page_sources.findFirst({
+        where: {
+          page_id: page.id,
+          target_site_id: targetSiteId,
+          target_category_id: targetCategoryId ? String(targetCategoryId) : null
+        }
+      });
+
+      if (!existing) {
+        await this.prisma.ztteam_page_sources.create({
+          data: {
+            page_id: page.id,
+            target_site_id: targetSiteId,
+            target_category_id: targetCategoryId ? String(targetCategoryId) : null,
+            is_active: true
+          }
+        });
+      }
+      affectedCount++;
+    }
+
+    return {
+      success: true,
+      count: affectedCount,
+      message: `Đã gán nguồn cào thành công cho ${affectedCount} Fanpage!`
+    };
+  }
+
+  /**
+   * ZTTeam: Áp dụng Lịch Đăng Chuẩn 4 Bài/Ngày (Rải 6 Cụm lệch 20 phút có Khung Rạng Sáng)
+   */
+  async ztteam_bulkApplySchedule(userId: string, data: { pageIds: string[] }) {
+    const { pageIds } = data;
+    if (!pageIds || pageIds.length === 0) {
+      throw new BadRequestException('Vui lòng chọn ít nhất 1 Fanpage');
+    }
+
+    const pages = await this.prisma.ztteam_pages.findMany({
+      where: {
+        id: { in: pageIds },
+        fb_account: { owner_user_id: userId }
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    if (pages.length === 0) {
+      throw new BadRequestException('Không tìm thấy Fanpage hợp lệ');
+    }
+
+    /** 6 Cụm giờ vàng chuẩn (Kèm Khung Rạng Sáng 05:00 - 06:40, lệch 20 phút) */
+    const ZTTEAM_GOLDEN_BATCHES = [
+      { batchIndex: 1, name: 'Cụm 1', times: ['05:00', '11:30', '16:30', '20:00'] },
+      { batchIndex: 2, name: 'Cụm 2', times: ['05:20', '11:50', '16:50', '20:20'] },
+      { batchIndex: 3, name: 'Cụm 3', times: ['05:40', '12:10', '17:10', '20:40'] },
+      { batchIndex: 4, name: 'Cụm 4', times: ['06:00', '12:30', '17:30', '21:00'] },
+      { batchIndex: 5, name: 'Cụm 5', times: ['06:20', '12:50', '17:50', '21:20'] },
+      { batchIndex: 6, name: 'Cụm 6', times: ['06:40', '13:10', '18:10', '21:40'] },
+    ];
+
+    const results: any[] = [];
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      const batch = ZTTEAM_GOLDEN_BATCHES[i % ZTTEAM_GOLDEN_BATCHES.length];
+
+      await this.prisma.ztteam_pages.update({
+        where: { id: page.id },
+        data: {
+          schedule_mode: 'fixed',
+          schedule_fixed_times: batch.times,
+          auto_publish_enabled: true
+        }
+      });
+
+      results.push({
+        pageId: page.id,
+        pageName: page.name,
+        batchName: batch.name,
+        times: batch.times
+      });
+    }
+
+    return {
+      success: true,
+      count: pages.length,
+      message: `Đã áp dụng Lịch Đăng Chuẩn 4 Bài/Ngày (Rải 20 Phút) cho ${pages.length} Fanpage thành công!`,
+      details: results,
+      batches: ZTTEAM_GOLDEN_BATCHES
+    };
   }
 
 

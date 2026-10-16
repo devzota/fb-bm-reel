@@ -33,6 +33,27 @@ export class ZTTeamFacebookController {
     return this.facebookService.ztteam_getConnectedPages(req.user.sub);
   }
 
+  @Post('pages/bulk-assign-sources')
+  ztteam_bulkAssignSources(
+    @Body() body: {
+      pageIds: string[];
+      targetSiteId: string;
+      targetCategoryId?: string | null;
+      mode?: 'replace' | 'append';
+    },
+    @Request() req: any
+  ) {
+    return this.facebookService.ztteam_bulkAssignSources(req.user.sub, body);
+  }
+
+  @Post('pages/bulk-apply-schedule')
+  ztteam_bulkApplySchedule(
+    @Body() body: { pageIds: string[] },
+    @Request() req: any
+  ) {
+    return this.facebookService.ztteam_bulkApplySchedule(req.user.sub, body);
+  }
+
   @Post('pages/:pageId/test-post')
   ztteam_testPost(@Param('pageId') pageId: string, @Body() body: { message: string }, @Request() req: any) {
     return this.facebookService.ztteam_testPost(pageId, req.user.sub, body.message);

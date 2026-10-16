@@ -6,9 +6,10 @@ import { LineChart, Line, AreaChart, Area, ResponsiveContainer, YAxis, Tooltip }
 import { ztteam_decodeHtmlEntity } from '../utils/stringUtils';
 import api from '../services/api';
 import CustomDropdown from '../components/CustomDropdown';
+import { useWordpressStore } from '../stores/wordpressStore';
 
 /** Component FanpageCard chuẩn Grid Card tích hợp 3 biểu đồ xu hướng sparkline mini */
-function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleToggleActive }: any) {
+function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleToggleActive, isSelected, onToggleSelect }: any) {
   const navigate = useNavigate();
   const { ztteam_getPageReport, ztteam_deletePage } = useZTTeamFacebookStore();
   const { ztteam_showToast, ztteam_showConfirm } = useUIStore();
@@ -120,10 +121,25 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
   const postUrl = `https://facebook.com/${page.fb_page_id || page.id}`;
 
   return (
-    <div className="bg-fb-surface-hover/30 rounded-2xl overflow-hidden transition-all duration-300 shadow-lg hover:shadow-2xl group flex flex-col justify-between">
+    <div className={`bg-fb-surface-hover/30 rounded-2xl overflow-hidden transition-all duration-300 shadow-lg hover:shadow-2xl group flex flex-col justify-between ${
+      isSelected ? 'ring-2 ring-fb-blue bg-blue-950/25 shadow-blue-500/20' : ''
+    }`}>
       {/** 1. Header Card Section: Nền đồng màu với Footer (bg-fb-surface-hover/70) */}
       <div className="p-4 bg-fb-surface-hover/70 flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0 flex-1">
+          {onToggleSelect && (
+            <div
+              onClick={(e) => { e.stopPropagation(); onToggleSelect(page.id); }}
+              className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all shrink-0 mt-2 ${
+                isSelected
+                  ? 'bg-fb-blue border-fb-blue text-white shadow-md shadow-blue-500/30'
+                  : 'border-slate-600 bg-slate-900/60 hover:border-blue-400 text-transparent'
+              }`}
+              title={isSelected ? 'Bỏ chọn Fanpage này' : 'Chọn Fanpage này'}
+            >
+              <span className="material-symbols-outlined text-[16px] font-black">check</span>
+            </div>
+          )}
           {page.avatar ? (
             <img
               src={page.avatar}
@@ -490,6 +506,24 @@ export default function FacebookPages() {
   const [filterOwner, setFilterOwner] = useState('');
   const [filterBusiness, setFilterBusiness] = useState('');
   const [filterTag, setFilterTag] = useState('');
+  const [filterSearch, setFilterSearch] = useState('');
+
+  /** State quản lý chọn hàng loạt */
+  const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
+  const { sites, ztteam_fetchSites, ztteam_fetchCategories } = useWordpressStore();
+
+  /** State Modal Gán Nguồn Hàng Loạt */
+  const [isBulkSourceModalOpen, setIsBulkSourceModalOpen] = useState(false);
+  const [bulkTargetSiteId, setBulkTargetSiteId] = useState('');
+  const [bulkTargetCategoryId, setBulkTargetCategoryId] = useState('');
+  const [bulkCategories, setBulkCategories] = useState<any[]>([]);
+  const [bulkSourceMode, setBulkSourceMode] = useState<'replace' | 'append'>('replace');
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [isSubmittingBulkSource, setIsSubmittingBulkSource] = useState(false);
+
+  /** State Modal Áp Dụng Lịch Đăng Hàng Loạt */
+  const [isBulkScheduleModalOpen, setIsBulkScheduleModalOpen] = useState(false);
+  const [isSubmittingBulkSchedule, setIsSubmittingBulkSchedule] = useState(false);
 
   const uniqueOwners = Array.from(new Set(pages.map(p => p.ownerName).filter(Boolean)));
   const uniqueBusinesses = Array.from(new Set(pages.map(p => p.businessName).filter(Boolean)));
@@ -500,12 +534,119 @@ export default function FacebookPages() {
     if (filterOwner && p.ownerName !== filterOwner) match = false;
     if (filterBusiness && p.businessName !== filterBusiness) match = false;
     if (filterTag && (!p.tags || !p.tags.includes(filterTag))) match = false;
+    if (filterSearch && filterSearch.trim().length > 0) {
+      const q = filterSearch.toLowerCase().trim();
+      const nameMatch = (p.name || '').toLowerCase().includes(q);
+      const idMatch = (p.fb_page_id || p.id || '').toLowerCase().includes(q);
+      if (!nameMatch && !idMatch) match = false;
+    }
     return match;
   });
 
   const activePages = filteredPages.filter(p => p.isActive !== false);
   const deactivatedPages = filteredPages.filter(p => p.isActive === false);
   const currentTabPages = pageTab === 'active' ? activePages : deactivatedPages;
+
+  /** Chọn / Bỏ chọn Fanpage */
+  const handleToggleSelectPage = (pageId: string) => {
+    setSelectedPageIds(prev =>
+      prev.includes(pageId) ? prev.filter(id => id !== pageId) : [...prev, pageId]
+    );
+  };
+
+  /** Chọn tất cả Page trong tab đang hiển thị */
+  const handleSelectAllCurrentTab = () => {
+    const currentIds = currentTabPages.map(p => p.id);
+    const allSelected = currentIds.length > 0 && currentIds.every(id => selectedPageIds.includes(id));
+    if (allSelected) {
+      setSelectedPageIds(prev => prev.filter(id => !currentIds.includes(id)));
+    } else {
+      setSelectedPageIds(prev => Array.from(new Set([...prev, ...currentIds])));
+    }
+  };
+
+  /** Chọn nhanh theo BM */
+  const handleSelectByBM = (bmName: string) => {
+    const bmPages = pages.filter(p => p.businessName === bmName && p.isActive !== false);
+    const bmIds = bmPages.map(p => p.id);
+    setSelectedPageIds(prev => Array.from(new Set([...prev, ...bmIds])));
+    ztteam_showToast(`Đã chọn toàn bộ ${bmIds.length} Page thuộc BM "${bmName}"`, 'info');
+  };
+
+  /** Chọn nhanh theo Nick cá nhân */
+  const handleSelectByOwner = (ownerName: string) => {
+    const ownerPages = pages.filter(p => p.ownerName === ownerName && p.isActive !== false);
+    const ownerIds = ownerPages.map(p => p.id);
+    setSelectedPageIds(prev => Array.from(new Set([...prev, ...ownerIds])));
+    ztteam_showToast(`Đã chọn toàn bộ ${ownerIds.length} Page thuộc Nick "${ownerName}"`, 'info');
+  };
+
+  /** Tự động tải danh mục khi đổi Website WordPress trong Modal gán nguồn */
+  useEffect(() => {
+    if (bulkTargetSiteId) {
+      setIsLoadingCategories(true);
+      ztteam_fetchCategories(bulkTargetSiteId)
+        .then(cats => setBulkCategories(cats || []))
+        .catch(() => setBulkCategories([]))
+        .finally(() => setIsLoadingCategories(false));
+    } else {
+      setBulkCategories([]);
+    }
+    setBulkTargetCategoryId('');
+  }, [bulkTargetSiteId]);
+
+  /** Xử lý Gán Nguồn Cào Hàng Loạt */
+  const handleBulkAssignSourcesSubmit = async () => {
+    if (selectedPageIds.length === 0) {
+      ztteam_showToast('Vui lòng chọn ít nhất 1 Fanpage', 'error');
+      return;
+    }
+    if (!bulkTargetSiteId) {
+      ztteam_showToast('Vui lòng chọn Website WordPress đích', 'error');
+      return;
+    }
+    try {
+      setIsSubmittingBulkSource(true);
+      const res = await api.post('/facebook/pages/bulk-assign-sources', {
+        pageIds: selectedPageIds,
+        targetSiteId: bulkTargetSiteId,
+        targetCategoryId: bulkTargetCategoryId || null,
+        mode: bulkSourceMode,
+      });
+      if (res.data?.success) {
+        ztteam_showToast(res.data.message || 'Gán nguồn cào hàng loạt thành công!', 'success');
+        setIsBulkSourceModalOpen(false);
+        await ztteam_fetchPagesFromDB();
+      }
+    } catch (err: any) {
+      ztteam_showToast(err.response?.data?.message || err.message || 'Lỗi khi gán nguồn', 'error');
+    } finally {
+      setIsSubmittingBulkSource(false);
+    }
+  };
+
+  /** Xử lý Áp Dụng Lịch 4 Bài/Ngày (Rải 6 Cụm Lệch 20 Phút) */
+  const handleBulkApplyScheduleSubmit = async () => {
+    if (selectedPageIds.length === 0) {
+      ztteam_showToast('Vui lòng chọn ít nhất 1 Fanpage', 'error');
+      return;
+    }
+    try {
+      setIsSubmittingBulkSchedule(true);
+      const res = await api.post('/facebook/pages/bulk-apply-schedule', {
+        pageIds: selectedPageIds,
+      });
+      if (res.data?.success) {
+        ztteam_showToast(res.data.message || 'Áp dụng lịch 4 bài/ngày thành công!', 'success');
+        setIsBulkScheduleModalOpen(false);
+        await ztteam_fetchPagesFromDB();
+      }
+    } catch (err: any) {
+      ztteam_showToast(err.response?.data?.message || err.message || 'Lỗi khi áp dụng lịch', 'error');
+    } finally {
+      setIsSubmittingBulkSchedule(false);
+    }
+  };
 
   useEffect(() => {
     const handleSDKLoad = () => {
@@ -523,6 +664,7 @@ export default function FacebookPages() {
   useEffect(() => {
     ztteam_fetchPagesFromDB();
     ztteam_fetchAccounts();
+    ztteam_fetchSites();
   }, []);
 
   const handleTestPost = async (pageId: string) => {
@@ -780,6 +922,22 @@ export default function FacebookPages() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+            <div className="relative flex-1 sm:w-56">
+              <span className="material-symbols-outlined absolute left-3 top-2.5 text-fb-text-muted text-sm">search</span>
+              <input
+                type="text"
+                value={filterSearch}
+                onChange={(e) => setFilterSearch(e.target.value)}
+                placeholder="Tìm tên hoặc ID Page..."
+                className="w-full pl-9 pr-3 py-1.5 bg-fb-surface-hover/80 border border-slate-700/60 rounded-full text-xs text-fb-text placeholder-fb-text-muted focus:outline-none focus:border-fb-blue transition-colors"
+              />
+              {filterSearch && (
+                <button onClick={() => setFilterSearch('')} className="absolute right-2.5 top-2 text-fb-text-muted hover:text-white">
+                  <span className="material-symbols-outlined text-sm">close</span>
+                </button>
+              )}
+            </div>
+
             {uniqueBusinesses.length > 0 && (
               <CustomDropdown
                 value={filterBusiness}
@@ -808,6 +966,57 @@ export default function FacebookPages() {
           </div>
         </div>
 
+        {/** Thanh Thao Tác Chọn Hàng Loạt Nhanh */}
+        <div className="px-4 sm:px-5 py-2.5 bg-fb-surface-hover/20 border-b border-fb-surface-hover/30 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleSelectAllCurrentTab}
+              className="px-3 py-1 rounded-lg bg-fb-surface-hover hover:bg-fb-surface-hover/80 text-fb-text font-bold flex items-center gap-1.5 transition-colors border border-slate-700/50"
+            >
+              <span className="material-symbols-outlined text-base text-blue-400">
+                {currentTabPages.length > 0 && currentTabPages.every(p => selectedPageIds.includes(p.id)) ? 'check_box' : 'check_box_outline_blank'}
+              </span>
+              <span>
+                {currentTabPages.length > 0 && currentTabPages.every(p => selectedPageIds.includes(p.id))
+                  ? 'Bỏ chọn tất cả'
+                  : `Chọn tất cả (${currentTabPages.length} Page)`}
+              </span>
+            </button>
+
+            {filterBusiness && (
+              <button
+                onClick={() => handleSelectByBM(filterBusiness)}
+                className="px-3 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 font-bold flex items-center gap-1.5 transition-colors border border-blue-500/30"
+              >
+                <span className="material-symbols-outlined text-sm">corporate_fare</span>
+                <span>Chọn cả BM: {filterBusiness}</span>
+              </button>
+            )}
+
+            {filterOwner && (
+              <button
+                onClick={() => handleSelectByOwner(filterOwner)}
+                className="px-3 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 font-bold flex items-center gap-1.5 transition-colors border border-cyan-500/30"
+              >
+                <span className="material-symbols-outlined text-sm">person</span>
+                <span>Chọn cả Nick: {filterOwner}</span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 text-fb-text-muted">
+            <span>Đang chọn: <b className="text-white font-bold">{selectedPageIds.length}</b> / {pages.length} Fanpage</span>
+            {selectedPageIds.length > 0 && (
+              <button
+                onClick={() => setSelectedPageIds([])}
+                className="text-red-400 hover:text-red-300 font-medium underline ml-1"
+              >
+                Xóa chọn
+              </button>
+            )}
+          </div>
+        </div>
+
         {/** Bố cục Grid Card đa cột (Desktop & Mobile) */}
         <div className="p-4 sm:p-5">
           {currentTabPages.length === 0 ? (
@@ -826,6 +1035,8 @@ export default function FacebookPages() {
                   testingPageId={testingPageId}
                   handleTestPost={handleTestPost}
                   handleToggleActive={handleTogglePageActive}
+                  isSelected={selectedPageIds.includes(page.id)}
+                  onToggleSelect={handleToggleSelectPage}
                 />
               ))}
             </div>
@@ -938,6 +1149,300 @@ export default function FacebookPages() {
                 className="px-5 py-2 bg-fb-surface-hover hover:bg-fb-surface-hover/80 text-fb-text font-bold rounded-full transition-colors"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/** FLOATING BULK ACTION BAR KHI CÓ CHỌN PAGE */}
+      {selectedPageIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 shadow-2xl rounded-2xl px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 sm:gap-5 max-w-[95vw] sm:max-w-2xl animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-2 pr-2 border-r border-slate-700/60 shrink-0">
+            <span className="w-7 h-7 rounded-xl bg-gradient-to-br from-fb-blue to-cyan-500 text-white text-xs font-black flex items-center justify-center shadow-md shadow-blue-500/20">
+              {selectedPageIds.length}
+            </span>
+            <span className="text-xs sm:text-sm font-bold text-white whitespace-nowrap">
+              Đã chọn {selectedPageIds.length} Page
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setIsBulkSourceModalOpen(true)}
+              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-500/20 active:scale-95 transition-all"
+            >
+              <span className="material-symbols-outlined text-base">rss_feed</span>
+              <span>Gán Nguồn Cào</span>
+            </button>
+
+            <button
+              onClick={() => setIsBulkScheduleModalOpen(true)}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
+            >
+              <span className="material-symbols-outlined text-base">schedule</span>
+              <span>Lịch 4 Bài (Lệch 20p)</span>
+            </button>
+
+            <button
+              onClick={() => setSelectedPageIds([])}
+              className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-medium flex items-center justify-center transition-colors border border-slate-700"
+              title="Bỏ chọn tất cả"
+            >
+              <span className="material-symbols-outlined text-base">close</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/** MODAL GÁN NGUỒN CÀO HÀNG LOẠT */}
+      {isBulkSourceModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-fb-surface w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-5 border border-slate-700/60 flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-fb-surface-hover/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shadow-md">
+                  <span className="material-symbols-outlined text-xl">rss_feed</span>
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-fb-text">Gán Nguồn Cào Hàng Loạt</h3>
+                  <p className="text-xs text-fb-text-muted">Áp dụng cho <b className="text-blue-400">{selectedPageIds.length} Fanpage</b> đã chọn</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsBulkSourceModalOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-fb-surface-hover flex items-center justify-center text-fb-text-muted hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/** Chọn Website WordPress đích */}
+              <div>
+                <label className="block text-xs font-bold text-fb-text mb-1.5">
+                  1. Chọn Website WordPress Đích <span className="text-red-400">*</span>
+                </label>
+                <CustomDropdown
+                  value={bulkTargetSiteId}
+                  onChange={(val) => setBulkTargetSiteId(val)}
+                  options={[
+                    { value: '', label: '-- Chọn Website WordPress --' },
+                    ...sites.map(s => ({
+                      value: s.id,
+                      label: `${s.wp_url} (${s.wp_username})`
+                    }))
+                  ]}
+                  className="w-full"
+                />
+              </div>
+
+              {/** Chọn Chuyên Mục WordPress */}
+              <div>
+                <label className="block text-xs font-bold text-fb-text mb-1.5 flex items-center justify-between">
+                  <span>2. Chọn Chuyên Mục Nhận Bài</span>
+                  {isLoadingCategories && <span className="text-[10px] text-cyan-400 animate-pulse">Đang tải danh mục...</span>}
+                </label>
+                <CustomDropdown
+                  value={bulkTargetCategoryId}
+                  onChange={(val) => setBulkTargetCategoryId(val)}
+                  options={[
+                    { value: '', label: 'Tất cả chuyên mục (Nhận toàn bộ bài cào)' },
+                    ...bulkCategories.map(c => ({
+                      value: String(c.id),
+                      label: `${c.name} (${c.count || 0} bài)`
+                    }))
+                  ]}
+                  disabled={!bulkTargetSiteId || isLoadingCategories}
+                  className="w-full"
+                />
+                <p className="text-[11px] text-fb-text-muted mt-1 italic">
+                  * Nếu chọn "Tất cả chuyên mục", hệ thống Round-Robin sẽ phân phối mọi bài viết từ website này sang các Page đã chọn.
+                </p>
+              </div>
+
+              {/** Chế độ gán nguồn */}
+              <div>
+                <label className="block text-xs font-bold text-fb-text mb-1.5">
+                  3. Chế Độ Gán Nguồn
+                </label>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div
+                    onClick={() => setBulkSourceMode('replace')}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      bulkSourceMode === 'replace'
+                        ? 'bg-blue-500/15 border-blue-500/50 text-white font-bold'
+                        : 'bg-slate-800/40 border-slate-700/60 text-fb-text-muted hover:border-slate-500'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="material-symbols-outlined text-sm text-blue-400">sync</span>
+                      <span>Thay thế nguồn cũ</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-normal leading-tight">
+                      Xóa các nguồn cũ, chỉ nhận bài từ Website vừa chọn (Khuyên dùng để đồng bộ 100%).
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setBulkSourceMode('append')}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      bulkSourceMode === 'append'
+                        ? 'bg-blue-500/15 border-blue-500/50 text-white font-bold'
+                        : 'bg-slate-800/40 border-slate-700/60 text-fb-text-muted hover:border-slate-500'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="material-symbols-outlined text-sm text-cyan-400">add_circle</span>
+                      <span>Gán thêm nguồn</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-normal leading-tight">
+                      Giữ nguyên các nguồn cũ đã cài và bổ sung thêm Website này vào danh sách.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-fb-surface-hover/50 flex items-center justify-end gap-2.5">
+              <button
+                onClick={() => setIsBulkSourceModalOpen(false)}
+                disabled={isSubmittingBulkSource}
+                className="px-4 py-2 bg-fb-surface-hover hover:bg-fb-surface-hover/80 text-fb-text font-bold rounded-xl text-xs transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={handleBulkAssignSourcesSubmit}
+                disabled={isSubmittingBulkSource || !bulkTargetSiteId}
+                className="px-5 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all disabled:opacity-50"
+              >
+                {isSubmittingBulkSource ? (
+                  <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+                ) : (
+                  <span className="material-symbols-outlined text-sm">done_all</span>
+                )}
+                <span>Xác nhận gán cho {selectedPageIds.length} Page</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/** MODAL ÁP DỤNG LỊCH ĐĂNG 4 BÀI/NGÀY (RẢI 6 CỤM LỆCH 20 PHÚT) */}
+      {isBulkScheduleModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-fb-surface w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-5 border border-slate-700/60 flex flex-col max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-2 border-b border-fb-surface-hover/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-md">
+                  <span className="material-symbols-outlined text-xl">schedule</span>
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-fb-text">Lịch Đăng Chuẩn 4 Bài/Ngày</h3>
+                  <p className="text-xs text-fb-text-muted">Tự động chia 6 Cụm lệch nhau chuẩn 20 phút cho <b className="text-emerald-400">{selectedPageIds.length} Fanpage</b></p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsBulkScheduleModalOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-fb-surface-hover flex items-center justify-center text-fb-text-muted hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-xs space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm">verified</span>
+                  Thuật toán Rải Giờ Chống Spam Facebook:
+                </p>
+                <p className="text-[11px] text-emerald-200/80">
+                  {selectedPageIds.length} Fanpage sẽ được chia đều vào 6 cụm giờ vàng (có khung Rạng Sáng 05:00 - 06:40 để đón sóng đọc sớm). Các cụm lệch nhau đúng 20 phút để triệt tiêu nguy cơ nghẽn API hoặc bị Facebook đánh dấu bão request.
+                </p>
+              </div>
+
+              {/** Bảng xem trước 6 cụm */}
+              <div className="border border-slate-700/60 rounded-2xl overflow-hidden">
+                <div className="grid grid-cols-5 p-2.5 bg-slate-800/60 font-bold text-slate-300 text-[11px] border-b border-slate-700/60">
+                  <span>Cụm Page</span>
+                  <span>1. Rạng Sáng</span>
+                  <span>2. Buổi Trưa</span>
+                  <span>3. Buổi Chiều</span>
+                  <span>4. Buổi Tối</span>
+                </div>
+                <div className="divide-y divide-slate-800 text-[11px]">
+                  <div className="grid grid-cols-5 p-2 bg-slate-900/40 items-center">
+                    <span className="font-bold text-blue-400">Cụm 1</span>
+                    <span className="font-mono text-emerald-400 font-bold">05:00</span>
+                    <span className="font-mono text-slate-300">11:30</span>
+                    <span className="font-mono text-slate-300">16:30</span>
+                    <span className="font-mono text-slate-300">20:00</span>
+                  </div>
+                  <div className="grid grid-cols-5 p-2 bg-slate-900/20 items-center">
+                    <span className="font-bold text-blue-400">Cụm 2</span>
+                    <span className="font-mono text-emerald-400 font-bold">05:20</span>
+                    <span className="font-mono text-slate-300">11:50</span>
+                    <span className="font-mono text-slate-300">16:50</span>
+                    <span className="font-mono text-slate-300">20:20</span>
+                  </div>
+                  <div className="grid grid-cols-5 p-2 bg-slate-900/40 items-center">
+                    <span className="font-bold text-blue-400">Cụm 3</span>
+                    <span className="font-mono text-emerald-400 font-bold">05:40</span>
+                    <span className="font-mono text-slate-300">12:10</span>
+                    <span className="font-mono text-slate-300">17:10</span>
+                    <span className="font-mono text-slate-300">20:40</span>
+                  </div>
+                  <div className="grid grid-cols-5 p-2 bg-slate-900/20 items-center">
+                    <span className="font-bold text-blue-400">Cụm 4</span>
+                    <span className="font-mono text-emerald-400 font-bold">06:00</span>
+                    <span className="font-mono text-slate-300">12:30</span>
+                    <span className="font-mono text-slate-300">17:30</span>
+                    <span className="font-mono text-slate-300">21:00</span>
+                  </div>
+                  <div className="grid grid-cols-5 p-2 bg-slate-900/40 items-center">
+                    <span className="font-bold text-blue-400">Cụm 5</span>
+                    <span className="font-mono text-emerald-400 font-bold">06:20</span>
+                    <span className="font-mono text-slate-300">12:50</span>
+                    <span className="font-mono text-slate-300">17:50</span>
+                    <span className="font-mono text-slate-300">21:20</span>
+                  </div>
+                  <div className="grid grid-cols-5 p-2 bg-slate-900/20 items-center">
+                    <span className="font-bold text-blue-400">Cụm 6</span>
+                    <span className="font-mono text-emerald-400 font-bold">06:40</span>
+                    <span className="font-mono text-slate-300">13:10</span>
+                    <span className="font-mono text-slate-300">18:10</span>
+                    <span className="font-mono text-slate-300">21:40</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-800/40 rounded-xl space-y-1 text-[11px] text-slate-400">
+                <p>• Tự động kích hoạt cờ <b>Tự động đăng bài (Auto Publish: ON)</b> cho toàn bộ Page.</p>
+                <p>• Đặt chế độ <b>Khung Giờ Cố Định (Fixed Schedule)</b> với 4 bài/ngày.</p>
+                <p>• Khoảng cách bài đăng của mỗi Page luôn đảm bảo cách nhau từ <b>3.5 đến 5.5 tiếng</b>.</p>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-fb-surface-hover/50 flex items-center justify-end gap-2.5">
+              <button
+                onClick={() => setIsBulkScheduleModalOpen(false)}
+                disabled={isSubmittingBulkSchedule}
+                className="px-4 py-2 bg-fb-surface-hover hover:bg-fb-surface-hover/80 text-fb-text font-bold rounded-xl text-xs transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={handleBulkApplyScheduleSubmit}
+                disabled={isSubmittingBulkSchedule}
+                className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50"
+              >
+                {isSubmittingBulkSchedule ? (
+                  <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+                ) : (
+                  <span className="material-symbols-outlined text-sm">done_all</span>
+                )}
+                <span>Xác nhận áp dụng cho {selectedPageIds.length} Page</span>
               </button>
             </div>
           </div>
