@@ -95,6 +95,7 @@ export class ZTTeamImageController {
     @Request() req: any,
     @Query('fbPageId') fbPageId?: string,
     @Query('status') status?: string,
+    @Query('videoStatus') videoStatus?: string,
     @Query('search') search?: string,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '24',
@@ -120,7 +121,7 @@ export class ZTTeamImageController {
         return {
           data: [],
           total: 0,
-          counts: { total: 0, queued: 0, rendering: 0, completed: 0, posted: 0, failed: 0 },
+          counts: { total: 0, queued: 0, rendering: 0, completed: 0, posted: 0, failed: 0, videoFailed: 0 },
         };
       }
       baseWhere = { page_id: p.id };
@@ -154,10 +155,12 @@ export class ZTTeamImageController {
       ];
     }
 
-    /** Lọc trạng thái chính xác */
+    /** ZTTeam: Lọc trạng thái bài viết hoặc lỗi video render */
     if (status) {
       const s = status.toUpperCase();
-      if (s === 'POSTED') {
+      if (s === 'VIDEO_FAILED') {
+        where.video_status = 'FAILED';
+      } else if (s === 'POSTED') {
         const postedCondition = [{ is_posted: true }, { status: 'POSTED' }];
         if (where.OR) {
           where.AND = [{ OR: where.OR }, { OR: postedCondition }];
@@ -179,6 +182,20 @@ export class ZTTeamImageController {
       }
     }
 
+    /** ZTTeam: Lọc theo trạng thái video render riêng biệt (nếu có) */
+    if (videoStatus) {
+      const vs = videoStatus.toUpperCase();
+      if (vs === 'FAILED') {
+        where.video_status = 'FAILED';
+      } else if (vs === 'PENDING') {
+        where.video_status = 'PENDING';
+      } else if (vs === 'COMPLETED') {
+        where.video_status = 'COMPLETED';
+      } else if (vs === 'NONE') {
+        where.video_status = { in: ['NONE', null] };
+      }
+    }
+
     /** Đếm song song số lượng bài theo từng trạng thái để hiển thị Tabs */
     const [
       images,
@@ -189,6 +206,7 @@ export class ZTTeamImageController {
       countCompleted,
       countPosted,
       countFailed,
+      countVideoFailed,
       countManual,
     ] = await Promise.all([
       this.prisma.ztteam_images.findMany({
@@ -214,6 +232,9 @@ export class ZTTeamImageController {
       }),
       this.prisma.ztteam_images.count({
         where: { ...baseWhere, status: 'FAILED' },
+      }),
+      this.prisma.ztteam_images.count({
+        where: { ...baseWhere, video_status: 'FAILED' },
       }),
       this.prisma.ztteam_images.count({
         where: { page_id: null },
@@ -350,6 +371,7 @@ export class ZTTeamImageController {
         completed: countCompleted,
         posted: countPosted,
         failed: countFailed,
+        videoFailed: countVideoFailed,
         manual: countManual,
       },
     };

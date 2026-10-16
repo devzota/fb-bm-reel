@@ -21,6 +21,8 @@ export default function AIFactory() {
     completed: number;
     posted: number;
     failed: number;
+    videoFailed?: number;
+    manual?: number;
   }>({
     total: 0,
     queued: 0,
@@ -28,11 +30,14 @@ export default function AIFactory() {
     completed: 0,
     posted: 0,
     failed: 0,
+    videoFailed: 0,
+    manual: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
 
   /** Filter States */
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterVideoStatus, setFilterVideoStatus] = useState('');
   const [filterPage, setFilterPage] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
@@ -64,10 +69,10 @@ export default function AIFactory() {
     ztteam_loadPages();
   }, []);
 
-  /** Fetch danh sách bài viết khi filterStatus, filterPage, debouncedKeyword, limit hoặc currentPage thay đổi */
+  /** Fetch danh sách bài viết khi filterStatus, filterVideoStatus, filterPage, debouncedKeyword, limit hoặc currentPage thay đổi */
   useEffect(() => {
     ztteam_loadItems();
-  }, [filterStatus, filterPage, debouncedKeyword, currentPage, limit]);
+  }, [filterStatus, filterVideoStatus, filterPage, debouncedKeyword, currentPage, limit]);
 
   /** SSE Live Time Update & Polling ngầm */
   useEffect(() => {
@@ -97,7 +102,7 @@ export default function AIFactory() {
       sse.close();
       clearInterval(interval);
     };
-  }, [filterStatus, filterPage, debouncedKeyword, currentPage, limit]);
+  }, [filterStatus, filterVideoStatus, filterPage, debouncedKeyword, currentPage, limit]);
 
   /** Tải danh sách bài viết từ API */
   const ztteam_loadItems = async (isSilent = false) => {
@@ -105,6 +110,7 @@ export default function AIFactory() {
       if (!isSilent) setIsLoading(true);
       const params = new URLSearchParams();
       if (filterStatus) params.append('status', filterStatus);
+      if (filterVideoStatus) params.append('videoStatus', filterVideoStatus);
       if (filterPage) params.append('fbPageId', filterPage);
       if (debouncedKeyword) params.append('search', debouncedKeyword);
       params.append('page', String(currentPage));
@@ -207,6 +213,7 @@ export default function AIFactory() {
   /** Đặt lại toàn bộ bộ lọc */
   const ztteam_resetFilters = () => {
     setFilterStatus('');
+    setFilterVideoStatus('');
     setFilterPage('');
     setSearchKeyword('');
     setDebouncedKeyword('');
@@ -225,7 +232,8 @@ export default function AIFactory() {
     { key: 'RENDERING', label: 'Đang vẽ AI', icon: 'auto_awesome', count: counts.rendering },
     { key: 'COMPLETED', label: 'Sẵn sàng đăng', icon: 'schedule', count: counts.completed },
     { key: 'POSTED', label: 'Đã xuất bản', icon: 'check_circle', count: counts.posted },
-    { key: 'FAILED', label: 'Lỗi', icon: 'error', count: counts.failed },
+    { key: 'FAILED', label: 'Lỗi Ảnh AI', icon: 'broken_image', count: counts.failed },
+    { key: 'VIDEO_FAILED', label: 'Lỗi Video Render', icon: 'videocam_off', count: counts.videoFailed || 0 },
   ];
 
   return (
@@ -383,6 +391,25 @@ export default function AIFactory() {
             </div>
           )}
 
+          {/** Dropdown Lọc Trạng Thái Video */}
+          <div className="flex items-center gap-2 min-w-[190px]">
+            <CustomDropdown
+              value={filterVideoStatus}
+              onChange={(val) => {
+                setFilterVideoStatus(String(val));
+                setCurrentPage(1);
+              }}
+              options={[
+                { value: '', label: 'Tất cả trạng thái Video' },
+                { value: 'FAILED', label: '⚠️ Lỗi Video Render' },
+                { value: 'PENDING', label: '⏳ Đang tạo Video' },
+                { value: 'COMPLETED', label: '🎬 Đã có Video Reel' },
+                { value: 'NONE', label: '🚫 Chưa tạo Video' },
+              ]}
+              className="w-full"
+            />
+          </div>
+
           {/** Chọn Số Bài Mỗi Trang */}
           <div className="flex items-center gap-2 min-w-[130px]">
             <CustomDropdown
@@ -401,7 +428,7 @@ export default function AIFactory() {
           </div>
 
           {/** Nút Đặt Lại (Hiển thị khi đang lọc) */}
-          {(filterStatus || filterPage || searchKeyword) && (
+          {(filterStatus || filterVideoStatus || filterPage || searchKeyword) && (
             <button
               type="button"
               onClick={ztteam_resetFilters}
