@@ -1064,6 +1064,37 @@ export default function FacebookPages() {
                 <span>Chọn cả Nick: {filterOwner}</span>
               </button>
             )}
+
+            {/** Phím tắt Thao Tác Hàng Loạt Nhanh */}
+            <div className="flex items-center gap-1.5 pl-1 border-l border-slate-700/60">
+              <button
+                onClick={() => {
+                  if (selectedPageIds.length === 0) {
+                    handleSelectAllCurrentTab();
+                  }
+                  setIsBulkScheduleModalOpen(true);
+                }}
+                className="px-3 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold flex items-center gap-1.5 transition-colors border border-emerald-500/40"
+                title="Áp dụng lịch 4 bài/ngày rải lệch 2 phút cho các Page đã chọn hoặc toàn bộ Page"
+              >
+                <span className="material-symbols-outlined text-sm">schedule</span>
+                <span>Lịch Đăng Chuẩn (Lệch 2p)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (selectedPageIds.length === 0) {
+                    handleSelectAllCurrentTab();
+                  }
+                  setIsBulkSourceModalOpen(true);
+                }}
+                className="px-3 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 font-bold flex items-center gap-1.5 transition-colors border border-blue-500/40"
+                title="Gán website WordPress nguồn cho các Page đã chọn hoặc toàn bộ Page"
+              >
+                <span className="material-symbols-outlined text-sm">rss_feed</span>
+                <span>Gán Nguồn Cào</span>
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 text-fb-text-muted">
@@ -1243,7 +1274,7 @@ export default function FacebookPages() {
               className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
             >
               <span className="material-symbols-outlined text-base">schedule</span>
-              <span>Lịch 4 Bài (Lệch 20p)</span>
+              <span>Lịch 4 Bài (Lệch 2p)</span>
             </button>
 
             <button
