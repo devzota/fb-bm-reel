@@ -551,14 +551,15 @@ export class ZTTeamDashboardService {
         const sysPostIds = pageToSystemPostIds.get(page.id) || new Set<string>();
         let pageViews = 0;
         let pageReach = 0;
+        let systemVideoReach = 0;
         let pageNewFollowers = 0;
         let pageInteractions = 0;
 
-        /** Truy vấn video views CHỈ cho các bài do hệ thống đăng */
+        /** ZTTeam: Truy vấn video views và blue_reels_play_count (reach duy nhất) chuẩn API Facebook */
         if (page.page_token_encrypted && page.fb_page_id) {
           try {
             const vidUrl = new URL(`https://graph.facebook.com/v25.0/${page.fb_page_id}/videos`);
-            vidUrl.searchParams.set('fields', 'id,views,created_time,description,picture,permalink_url');
+            vidUrl.searchParams.set('fields', 'id,views,created_time,description,picture,permalink_url,video_insights.metric(blue_reels_play_count){values}');
             vidUrl.searchParams.set('limit', '100');
             vidUrl.searchParams.set('access_token', page.page_token_encrypted);
 
@@ -570,6 +571,11 @@ export class ZTTeamDashboardService {
               if (sysPostIds.has(v.id)) {
                 const vViews = Number(v.views) || 0;
                 pageViews += vViews;
+
+                /** ZTTeam: Lấy lượt người xem duy nhất (unique reach) thực tế từ API Facebook */
+                const bluePlays = v.video_insights?.data?.[0]?.values?.[0]?.value;
+                const vReach = typeof bluePlays === 'number' ? bluePlays : 0;
+                systemVideoReach += vReach;
 
                 const sysPost = systemPostsByFbId.get(v.id);
                 allSystemVideoObjects.push({
@@ -591,13 +597,14 @@ export class ZTTeamDashboardService {
             this.logger.warn(`Lỗi lấy video views cho ${page.name}: ${vidErr.message}`);
           }
 
-          /** Lấy insights: Reach, Follower mới, Tương tác */
+          /** ZTTeam: Lấy insights từ Facebook: Reach trang, Follower mới, Tương tác */
           try {
             const report = await this.facebookService.ztteam_getPageInsights(page.id, userId);
             if (Array.isArray(report)) {
               const reachMetric = report.find((m: any) => m.name === 'page_total_media_view_unique');
               if (reachMetric?.values) {
-                pageReach = reachMetric.values.slice(-days).reduce((s: number, v: any) => s + (v.value || 0), 0);
+                const insReach = reachMetric.values.slice(-days).reduce((s: number, v: any) => s + (v.value || 0), 0);
+                pageReach = insReach;
               }
               const followMetric = report.find((m: any) => m.name === 'page_daily_follows');
               if (followMetric?.values) {
@@ -613,10 +620,8 @@ export class ZTTeamDashboardService {
           }
         }
 
-        /** Fallback reach nếu Insight chưa kịp cập nhật nhưng video có lượt xem */
-        if (pageReach === 0 && pageViews > 0) {
-          pageReach = Math.round(pageViews * 0.85);
-        }
+        /** ZTTeam: Tiếp cận thực tế lấy số lớn nhất giữa Reach trang của Facebook và Reach video realtime của Facebook, tuyệt đối không dùng hệ số ảo */
+        pageReach = Math.max(pageReach, systemVideoReach);
 
         leaderboard.push({
           pageId: page.id,
