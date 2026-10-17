@@ -119,6 +119,13 @@ export class ZTTeamFacebookController {
     return this.facebookService.ztteam_autoCommentLink(pageId, postId, manualLink);
   }
 
+  @Post('pages/branding/batch-generate')
+  ztteam_batchGenerateBranding(
+    @Body() body: { limit?: number; overwriteExisting?: boolean; pageIds?: string[] }
+  ) {
+    return this.facebookService.ztteam_batchGenerateBranding(body || {});
+  }
+
   @Post('pages/:pageId/branding/generate')
   ztteam_generateBranding(@Param('pageId') pageId: string) {
     return this.facebookService.ztteam_generatePageBranding(pageId);

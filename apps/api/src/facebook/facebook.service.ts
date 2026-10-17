@@ -2224,29 +2224,49 @@ export class ZTTeamFacebookService {
   }
 
   /**
-   * ZTTeam: Key SangTao.ai dành riêng cho chức năng tạo Avatar & Ảnh bìa Page (cô lập tuyệt đối với ảnh bài viết)
+   * ZTTeam: Danh sách Key SangTao.ai dành riêng cho chức năng tạo Avatar & Ảnh bìa Page (cô lập tuyệt đối với ảnh bài viết)
+   * Tự động luân chuyển sang Key kế tiếp khi Key hiện tại hết credit hoặc gặp sự cố
    */
-  private readonly ZTTEAM_BRANDING_SANGTAO_KEY = 'stai_751dcc6175575dd8cf1f5fc522b62cc2da73e8404f3f527e';
+  private readonly ZTTEAM_BRANDING_SANGTAO_KEYS = [
+    'stai_751dcc6175575dd8cf1f5fc522b62cc2da73e8404f3f527e', /** Key 1: 24 credit */
+    'stai_bf5e874c373092f9429faba2f1d5da159fb9d89929620c70', /** Key 2: 100 credit */
+  ];
 
   /**
-   * ZTTeam: Tạo ảnh bằng SangTao.ai (Key Branding riêng), chỉ dùng duy nhất SangTao.ai không fallback sang AI khác
+   * ZTTeam: Tạo ảnh bằng SangTao.ai (Pool Key Branding riêng), tự động chuyển key khi hết credit
    */
   async ztteam_renderImageSmartFallback(prompt: string, aspectRatio: '1:1' | '16:9'): Promise<{
     imageUrl: string;
     localPath: string;
     engine: 'sangtao';
   }> {
-    this.logger.log(`[Branding] Đang tạo ảnh (${aspectRatio}) bằng SangTao.ai (Key Branding riêng)...`);
-    const result = await this.storyTestService.ztteam_renderStoryImage({
-      prompt,
-      aspectRatio,
-      apiKey: this.ZTTEAM_BRANDING_SANGTAO_KEY,
-    });
-    return {
-      imageUrl: result.imageUrl,
-      localPath: result.localPath,
-      engine: 'sangtao',
-    };
+    let lastError: any = null;
+
+    for (let i = 0; i < this.ZTTEAM_BRANDING_SANGTAO_KEYS.length; i++) {
+      const currentKey = this.ZTTEAM_BRANDING_SANGTAO_KEYS[i];
+      const maskedKey = `${currentKey.substring(0, 8)}...${currentKey.substring(currentKey.length - 4)}`;
+      this.logger.log(`[Branding] Đang tạo ảnh (${aspectRatio}) bằng SangTao.ai với Key #${i + 1} (${maskedKey})...`);
+
+      try {
+        const result = await this.storyTestService.ztteam_renderStoryImage({
+          prompt,
+          aspectRatio,
+          apiKey: currentKey,
+        });
+
+        return {
+          imageUrl: result.imageUrl,
+          localPath: result.localPath,
+          engine: 'sangtao',
+        };
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = err?.message || String(err);
+        this.logger.warn(`[Branding] Key #${i + 1} (${maskedKey}) gặp lỗi: ${errMsg}. Đang kiểm tra chuyển sang key tiếp theo...`);
+      }
+    }
+
+    throw new BadRequestException(`Tất cả các Key SangTao.ai Branding đều không thể tạo ảnh: ${lastError?.message || 'Lỗi không xác định'}`);
   }
 
   /**
@@ -2509,6 +2529,97 @@ export class ZTTeamFacebookService {
       message: `Đã áp dụng thành công ${[updatedAvatar ? 'Avatar' : null, updatedCover ? 'Ảnh bìa' : null].filter(Boolean).join(' và ')} lên Fanpage "${page.name}"!`,
       newAvatarUrl: `https://graph.facebook.com/${page.fb_page_id}/picture?type=large&_t=${Date.now()}`,
       newCoverUrl: data.coverUrl || null
+    };
+  }
+
+  /**
+   * ZTTeam: Tạo hàng loạt Avatar & Ảnh bìa cho các Fanpage chưa có hoặc cần sinh mới
+   */
+  async ztteam_batchGenerateBranding(options: {
+    limit?: number;
+    overwriteExisting?: boolean;
+    pageIds?: string[];
+  } = {}) {
+    const { limit = 68, overwriteExisting = false, pageIds } = options;
+
+    const whereClause: any = { is_active: true };
+    if (pageIds && pageIds.length > 0) {
+      whereClause.id = { in: pageIds };
+    }
+
+    const pages = await this.prisma.ztteam_pages.findMany({
+      where: whereClause,
+      orderBy: { name: 'asc' },
+    });
+
+    this.logger.log(`[Branding Batch] Bắt đầu xử lý hàng loạt cho ${pages.length} Fanpage (Limit: ${limit}, Overwrite: ${overwriteExisting})...`);
+
+    const results: any[] = [];
+    let processedCount = 0;
+
+    for (const page of pages) {
+      if (processedCount >= limit) {
+        this.logger.log(`[Branding Batch] Đã đạt giới hạn số lượng (${limit} page). Dừng tiến trình.`);
+        break;
+      }
+
+      const hasAvatar = !!(page as any).branding_avatar_url;
+      const hasCover = !!(page as any).branding_cover_url;
+
+      if (!overwriteExisting && hasAvatar && hasCover) {
+        this.logger.log(`[Branding Batch] Page "${page.name}" đã có đầy đủ Avatar & Cover. Bỏ qua.`);
+        results.push({ pageId: page.id, name: page.name, status: 'SKIPPED', message: 'Đã có đủ Avatar & Cover' });
+        continue;
+      }
+
+      try {
+        this.logger.log(`[Branding Batch] [${processedCount + 1}/${limit}] Đang xử lý Page "${page.name}"...`);
+        let pageResult: any = null;
+
+        if (overwriteExisting || (!hasAvatar && !hasCover)) {
+          /** Tạo cả bộ Avatar và Cover */
+          pageResult = await this.ztteam_generatePageBranding(page.id);
+        } else if (!hasCover) {
+          /** Chỉ thiếu Cover */
+          pageResult = await this.ztteam_regenerateBrandingItem(page.id, 'cover');
+        } else if (!hasAvatar) {
+          /** Chỉ thiếu Avatar */
+          pageResult = await this.ztteam_regenerateBrandingItem(page.id, 'avatar');
+        }
+
+        results.push({
+          pageId: page.id,
+          name: page.name,
+          status: 'SUCCESS',
+          result: pageResult,
+        });
+        processedCount++;
+
+        /** Nghỉ 3 giây giữa các page để giữ nhịp độ an toàn cho API */
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      } catch (err: any) {
+        const errMsg = err?.message || String(err);
+        this.logger.error(`[Branding Batch] Lỗi xử lý Page "${page.name}": ${errMsg}`);
+        results.push({
+          pageId: page.id,
+          name: page.name,
+          status: 'FAILED',
+          error: errMsg,
+        });
+
+        /** Nếu tất cả key đều hết credit hoặc lỗi toàn bộ, dừng lại an toàn */
+        if (errMsg.includes('Tất cả các Key SangTao.ai') || errMsg.includes('credit')) {
+          this.logger.warn('[Branding Batch] Đã hết toàn bộ credit trên tất cả các Key SangTao.ai. Dừng tiến trình an toàn.');
+          break;
+        }
+      }
+    }
+
+    return {
+      success: true,
+      totalRequested: pages.length,
+      totalProcessed: processedCount,
+      results,
     };
   }
 }
