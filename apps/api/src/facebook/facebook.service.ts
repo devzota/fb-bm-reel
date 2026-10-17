@@ -2207,6 +2207,25 @@ export class ZTTeamFacebookService {
       this.logger.warn(`Lỗi tạo Ảnh bìa Cover cho Page ${page.name}: ${coverErr.message}`);
     }
 
+    /** 5. ZTTeam: Tự động áp dụng ngay Avatar & Ảnh bìa lên Fanpage Facebook qua Meta Graph API */
+    let appliedToFacebook = false;
+    let applyMessage = '';
+    try {
+      this.logger.log(`Tự động áp dụng Avatar & Ảnh bìa lên Facebook cho Page "${page.name}"...`);
+      const applyRes = await this.ztteam_applyPageBranding(page.id, {
+        avatarUrl: avatarResult.imageUrl,
+        avatarLocalPath: avatarResult.localPath,
+        coverUrl: coverResult?.imageUrl || null,
+        coverLocalPath: coverResult?.localPath || null,
+      });
+      appliedToFacebook = true;
+      applyMessage = applyRes?.message || 'Đã áp dụng thành công lên Facebook!';
+      this.logger.log(`[Branding Auto-Apply] Thành công: ${applyMessage}`);
+    } catch (applyErr: any) {
+      applyMessage = `Lỗi áp dụng lên Facebook: ${applyErr?.message || String(applyErr)}`;
+      this.logger.warn(`[Branding Auto-Apply] ${applyMessage}`);
+    }
+
     return {
       success: true,
       pageId: page.id,
@@ -2219,7 +2238,9 @@ export class ZTTeamFacebookService {
       coverLocalPath: coverResult?.localPath || null,
       coverPrompt: prompts.coverPrompt,
       avatarEngine: avatarResult.engine,
-      coverEngine: coverResult?.engine || null
+      coverEngine: coverResult?.engine || null,
+      appliedToFacebook,
+      applyMessage,
     };
   }
 
@@ -2339,6 +2360,25 @@ export class ZTTeamFacebookService {
           branding_cover_prompt: activePrompt,
         } as any
       });
+    }
+
+    /** ZTTeam: Tự động cập nhật ngay ảnh vừa vẽ lại lên Fanpage Facebook */
+    try {
+      this.logger.log(`Tự động cập nhật ${type} vừa vẽ lại lên Facebook cho Page "${page.name}"...`);
+      if (type === 'avatar') {
+        await this.ztteam_applyPageBranding(page.id, {
+          avatarUrl: result.imageUrl,
+          avatarLocalPath: result.localPath,
+        });
+      } else {
+        await this.ztteam_applyPageBranding(page.id, {
+          coverUrl: result.imageUrl,
+          coverLocalPath: result.localPath,
+        });
+      }
+      this.logger.log(`Đã cập nhật ${type} lên Facebook thành công cho Page "${page.name}"!`);
+    } catch (applyErr: any) {
+      this.logger.warn(`Lỗi cập nhật ${type} lên Facebook cho Page "${page.name}": ${applyErr.message}`);
     }
 
     return {
@@ -2619,6 +2659,81 @@ export class ZTTeamFacebookService {
       success: true,
       totalRequested: pages.length,
       totalProcessed: processedCount,
+      results,
+    };
+  }
+
+  /**
+   * ZTTeam: Áp dụng hàng loạt Avatar & Ảnh bìa lên Facebook cho các Page đã có ảnh trong CSDL
+   */
+  async ztteam_batchApplyBranding(options: { pageIds?: string[]; delayMs?: number } = {}) {
+    const { pageIds, delayMs = 5000 } = options;
+
+    const whereClause: any = {
+      is_active: true,
+      OR: [
+        { branding_avatar_url: { not: null } },
+        { branding_cover_url: { not: null } },
+      ],
+    };
+
+    if (pageIds && pageIds.length > 0) {
+      whereClause.id = { in: pageIds };
+    }
+
+    const pages = await this.prisma.ztteam_pages.findMany({
+      where: whereClause,
+      orderBy: { name: 'asc' },
+    });
+
+    this.logger.log(`[Batch Apply] Bắt đầu áp dụng lên Facebook cho ${pages.length} Fanpage (Delay: ${delayMs}ms)...`);
+
+    const results: any[] = [];
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      const index = i + 1;
+      this.logger.log(`[Batch Apply] [${index}/${pages.length}] Đang áp dụng cho Page "${page.name}"...`);
+
+      try {
+        const applyRes = await this.ztteam_applyPageBranding(page.id, {
+          avatarUrl: (page as any).branding_avatar_url || undefined,
+          coverUrl: (page as any).branding_cover_url || undefined,
+        });
+
+        results.push({
+          pageId: page.id,
+          name: page.name,
+          status: 'SUCCESS',
+          result: applyRes,
+        });
+        successCount++;
+        this.logger.log(`[Batch Apply] [${index}/${pages.length}] Page "${page.name}" áp dụng thành công!`);
+      } catch (err: any) {
+        failCount++;
+        const errMsg = err?.message || String(err);
+        this.logger.error(`[Batch Apply] [${index}/${pages.length}] Lỗi áp dụng Page "${page.name}": ${errMsg}`);
+        results.push({
+          pageId: page.id,
+          name: page.name,
+          status: 'FAILED',
+          error: errMsg,
+        });
+      }
+
+      /** Giãn cách an toàn giữa các request gửi đến Facebook Graph API */
+      if (i < pages.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+
+    return {
+      success: true,
+      totalRequested: pages.length,
+      successCount,
+      failCount,
       results,
     };
   }

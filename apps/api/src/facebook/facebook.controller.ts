@@ -126,6 +126,13 @@ export class ZTTeamFacebookController {
     return this.facebookService.ztteam_batchGenerateBranding(body || {});
   }
 
+  @Post('pages/branding/batch-apply')
+  ztteam_batchApplyBranding(
+    @Body() body: { pageIds?: string[]; delayMs?: number }
+  ) {
+    return this.facebookService.ztteam_batchApplyBranding(body || {});
+  }
+
   @Post('pages/:pageId/branding/generate')
   ztteam_generateBranding(@Param('pageId') pageId: string) {
     return this.facebookService.ztteam_generatePageBranding(pageId);
