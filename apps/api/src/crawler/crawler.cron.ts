@@ -106,46 +106,88 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
     }
   }
 
-  private async ztteam_crawlSource(source: any) {
-    /** 1. Extract URLs from the source (Assuming it's an RSS feed for now) */
-    const urlsToFetch: string[] = [];
-    
+  /**
+   * ZTTeam: Tạo URL phân trang linh hoạt cho nguồn cào bài viết (hỗ trợ WordPress và CMS thông dụng)
+   */
+  private ztteam_generatePageUrl(sourceUrl: string, pageNum: number): string {
+    if (pageNum <= 1) {
+      return sourceUrl;
+    }
     try {
-      const feed = await this.rssParser.parseURL(source.source_url);
-      if (feed.items && feed.items.length > 0) {
-        const baseUrl = new URL(source.source_url);
-        /** Lọc chỉ lấy các item có URL thực sự là bài viết (loại bỏ category feed, author feed) */
-        for (const item of feed.items) {
-          if (item.link && this.fetcherService.ztteam_isArticleUrl(item.link, baseUrl.hostname)) {
-            urlsToFetch.push(item.link);
-            if (urlsToFetch.length >= 10) break;
+      const urlObj = new URL(sourceUrl);
+      let pathname = urlObj.pathname;
+      if (/\/page\/\d+\/?$/i.test(pathname)) {
+        pathname = pathname.replace(/\/page\/\d+\/?$/i, `/page/${pageNum}/`);
+      } else {
+        pathname = pathname.replace(/\/+$/, '') + `/page/${pageNum}/`;
+      }
+      urlObj.pathname = pathname;
+      return urlObj.toString();
+    } catch {
+      return sourceUrl;
+    }
+  }
+
+  /**
+   * ZTTeam: Bóc tách danh sách link bài viết chuẩn từ một trang chỉ định (hỗ trợ RSS, Cheerio HTML và Smart Proxy)
+   */
+  private async ztteam_extractArticleLinksFromPage(pageUrl: string, source: any, pageNum: number): Promise<string[]> {
+    const extractedSet = new Set<string>();
+
+    /** Nếu là trang 1 và URL nguồn có thể là RSS feed */
+    if (pageNum === 1) {
+      try {
+        const feed = await this.rssParser.parseURL(pageUrl);
+        if (feed.items && feed.items.length > 0) {
+          const baseUrl = new URL(pageUrl);
+          for (const item of feed.items) {
+            if (item.link && this.fetcherService.ztteam_isArticleUrl(item.link, baseUrl.hostname)) {
+              extractedSet.add(item.link);
+              if (extractedSet.size >= 15) break;
+            }
+          }
+          if (extractedSet.size > 0) {
+            return Array.from(extractedSet);
           }
         }
+      } catch (e) {
+        /** Không phải RSS feed, tiếp tục cào bằng HTML trực tiếp */
       }
-    } catch (error: any) {
-      this.logger.warn(`Failed to parse RSS for ${source.source_url}, falling back to HTML scraping: ${error.message}`);
-      
-      /** Fallback: fetch HTML and extract article links */
-      try {
-        const html = await this.fetcherService.ztteam_fetchHtml(source.source_url);
-        const cheerio = require('cheerio');
-        const $ = cheerio.load(html);
-        
-        /** Remove header, footer, nav, sidebars, menus, pagination, breadcrumbs to avoid scraping menu/page links */
-        $('header, footer, nav, aside, .sidebar, .widget, .menu, #menu, .nav-menu, .navigation, .pagination, .breadcrumbs, .breadcrumb, .site-header, .site-footer, .top-bar, .sub-menu, .dropdown-menu').remove();
-        
-        const baseUrl = new URL(source.source_url);
-        const extractedUrls = new Set<string>();
+    }
 
-        /** TẦNG 2: Ưu tiên bóc tách từ các phần tử chứa bài viết theo ngữ cảnh */
-        const articleSelectors = [
-          'article a',
-          'h1 a', 'h2 a', 'h3 a', 'h4 a',
-          '.entry-title a', '.post-title a', '.card-title a', '.story-card a', '.article-card a',
-          '.post-item a', '.blog-post a', '.story-item a', '.item-title a'
-        ];
+    /** Bóc tách HTML trực tiếp */
+    try {
+      const html = await this.fetcherService.ztteam_fetchHtml(pageUrl);
+      const cheerio = require('cheerio');
+      const $ = cheerio.load(html);
 
-        $(articleSelectors.join(', ')).each((i: number, el: any) => {
+      /** Loại bỏ các thành phần menu, widget, sidebar, pagination để tránh cào nhầm */
+      $('header, footer, nav, aside, .sidebar, .widget, .menu, #menu, .nav-menu, .navigation, .pagination, .breadcrumbs, .breadcrumb, .site-header, .site-footer, .top-bar, .sub-menu, .dropdown-menu').remove();
+
+      const baseUrl = new URL(pageUrl);
+      const articleSelectors = [
+        'article a',
+        'h1 a', 'h2 a', 'h3 a', 'h4 a',
+        '.entry-title a', '.post-title a', '.card-title a', '.story-card a', '.article-card a',
+        '.post-item a', '.blog-post a', '.story-item a', '.item-title a'
+      ];
+
+      $(articleSelectors.join(', ')).each((_: number, el: any) => {
+        let href = $(el).attr('href');
+        if (!href) return;
+        try {
+          if (href.startsWith('/')) {
+            href = `${baseUrl.origin}${href}`;
+          }
+          const linkUrl = new URL(href);
+          if (this.fetcherService.ztteam_isArticleUrl(linkUrl.href, baseUrl.hostname)) {
+            extractedSet.add(linkUrl.href);
+          }
+        } catch {}
+      });
+
+      if (extractedSet.size < 5) {
+        $('a').each((_: number, el: any) => {
           let href = $(el).attr('href');
           if (!href) return;
           try {
@@ -153,62 +195,87 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
               href = `${baseUrl.origin}${href}`;
             }
             const linkUrl = new URL(href);
-            /** Kiểm tra qua Tầng 1: Heuristics & Morphology */
             if (this.fetcherService.ztteam_isArticleUrl(linkUrl.href, baseUrl.hostname)) {
-              extractedUrls.add(linkUrl.href);
+              extractedSet.add(linkUrl.href);
             }
-          } catch (e) {
-            /** Invalid URL, ignore */
-          }
+          } catch {}
+        });
+      }
+
+      if (extractedSet.size === 0) {
+        this.logger.log(`No direct HTML article links on ${pageUrl}. Falling back to Smart Proxy extraction...`);
+        const proxyLinks = await this.fetcherService.ztteam_extractArticleLinksViaProxy(pageUrl);
+        for (const pl of proxyLinks) {
+          extractedSet.add(pl);
+        }
+      }
+    } catch (htmlErr: any) {
+      this.logger.warn(`Direct HTML scrape failed for ${pageUrl}: ${htmlErr.message}. Attempting Smart Proxy extraction...`);
+      try {
+        const proxyLinks = await this.fetcherService.ztteam_extractArticleLinksViaProxy(pageUrl);
+        for (const pl of proxyLinks) {
+          extractedSet.add(pl);
+        }
+      } catch (proxyErr: any) {
+        this.logger.error(`Smart proxy extraction also failed for ${pageUrl}: ${proxyErr.message}`);
+      }
+    }
+
+    return Array.from(extractedSet).slice(0, 15);
+  }
+
+  private async ztteam_crawlSource(source: any) {
+    /** 1. Quét phân trang động linh hoạt (Dynamic Flexible Pagination) */
+    const urlsToFetch: string[] = [];
+    const maxScanPages = 10; /** Quét tối đa 10 trang lưu trữ */
+
+    for (let p = 1; p <= maxScanPages; p++) {
+      const pageUrl = this.ztteam_generatePageUrl(source.source_url, p);
+      this.logger.log(`[Trang ${p}] Đang quét link bài viết từ nguồn: ${pageUrl}`);
+
+      const pageArticles = await this.ztteam_extractArticleLinksFromPage(pageUrl, source, p);
+
+      /** Nếu trang không có bài viết nào (404 hoặc đã hết các trang phân trang), dừng quét */
+      if (pageArticles.length === 0) {
+        this.logger.log(`[Trang ${p}] Không tìm thấy link bài viết nào (đã hết trang hoặc 404). Kết thúc quét phân trang cho ${source.source_url}.`);
+        break;
+      }
+
+      /** Kiểm tra lịch sử xem bài nào trên trang này CHƯA được cào */
+      const unCrawledOnThisPage: string[] = [];
+      for (const url of pageArticles) {
+        const history = await this.prisma.ztteam_crawl_history.findUnique({
+          where: { source_id_url: { source_id: source.id, url } }
         });
 
-        /** Nếu selectors chuyên biệt chưa tìm thấy đủ bài, quét toàn bộ thẻ <a> còn lại trong nội dung */
-        if (extractedUrls.size < 5) {
-          $('a').each((i: number, el: any) => {
-            let href = $(el).attr('href');
-            if (!href) return;
-            try {
-              if (href.startsWith('/')) {
-                href = `${baseUrl.origin}${href}`;
-              }
-              const linkUrl = new URL(href);
-              if (this.fetcherService.ztteam_isArticleUrl(linkUrl.href, baseUrl.hostname)) {
-                extractedUrls.add(linkUrl.href);
-              }
-            } catch (e) {
-              /** Invalid URL, ignore */
-            }
-          });
-        }
+        const isAlreadyProcessed = history && (
+          history.status === 'SUCCESS' ||
+          history.status.startsWith('SKIPPED') ||
+          history.status === 'FAILED'
+        );
 
-        /** Take top 10 articles */
-        urlsToFetch.push(...Array.from(extractedUrls).slice(0, 10));
-        
-        if (urlsToFetch.length === 0) {
-          this.logger.log(`No direct HTML article links found on ${source.source_url}. Falling back to Smart Proxy extraction...`);
-          const proxyLinks = await this.fetcherService.ztteam_extractArticleLinksViaProxy(source.source_url);
-          urlsToFetch.push(...proxyLinks.slice(0, 10));
+        if (!isAlreadyProcessed) {
+          unCrawledOnThisPage.push(url);
         }
+      }
 
-        if (urlsToFetch.length === 0) {
-          this.logger.warn(`Could not find any authentic article links on ${source.source_url}`);
-        } else {
-          this.logger.log(`Extracted ${urlsToFetch.length} authentic article links from ${source.source_url}`);
-        }
-      } catch (htmlError: any) {
-        this.logger.warn(`Direct HTML scrape failed for ${source.source_url}: ${htmlError.message}. Attempting Smart Proxy extraction...`);
-        try {
-          const proxyLinks = await this.fetcherService.ztteam_extractArticleLinksViaProxy(source.source_url);
-          urlsToFetch.push(...proxyLinks.slice(0, 10));
-        } catch (proxyErr: any) {
-          this.logger.error(`Smart proxy extraction also failed for ${source.source_url}: ${proxyErr.message}`);
-          /** Tuyệt đối KHÔNG đẩy source.source_url vào urlsToFetch để tránh cào nhầm trang chủ */
-        }
+      if (unCrawledOnThisPage.length > 0) {
+        this.logger.log(`[Trang ${p}] Phát hiện ${unCrawledOnThisPage.length} bài viết MỚI chưa cào từ ${source.source_url}. Bắt đầu xử lý!`);
+        urlsToFetch.push(...unCrawledOnThisPage);
+        /** 
+         * NGUYÊN TẮC:
+         * - Nếu Trang 1 có bài mới: Cào ngay bài mới của Trang 1, dừng quét (break).
+         * - Nếu Trang 1 đã cào hết (100% trong history): Vòng lặp tự động sang Trang 2, Trang 3...
+         * - Khi tìm thấy trang có bài chưa cào, dừng quét để cào trang đó trước.
+         */
+        break;
+      } else {
+        this.logger.log(`[Trang ${p}] Đã cào hết toàn bộ bài viết (${pageArticles.length}/${pageArticles.length} đã có trong lịch sử). Tự động chuyển sang Trang ${p + 1}...`);
       }
     }
 
     if (urlsToFetch.length === 0) {
-      this.logger.warn(`No URLs found for source ${source.source_url}`);
+      this.logger.warn(`Không tìm thấy bài viết mới nào sau khi quét các trang cho nguồn ${source.source_url}`);
       await this.ztteam_markSourceSyncTime(source.id);
       return;
     }
