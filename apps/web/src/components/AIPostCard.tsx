@@ -177,8 +177,8 @@ export default function ZTTeamAIPostCard({
       case 'FAILED':
         return (
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1">
-            <span className="material-symbols-outlined text-[13px]">error</span>
-            {hasImage ? 'Lỗi đăng FB' : 'Lỗi tạo ảnh'}
+            <span className="material-symbols-outlined text-[13px]">sync_problem</span>
+            Lỗi đăng Fanpage
           </span>
         );
       default:

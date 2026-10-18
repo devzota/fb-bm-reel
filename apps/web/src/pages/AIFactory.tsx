@@ -232,8 +232,8 @@ export default function AIFactory() {
     { key: 'RENDERING', label: 'Đang vẽ AI', icon: 'auto_awesome', count: counts.rendering },
     { key: 'COMPLETED', label: 'Sẵn sàng đăng', icon: 'schedule', count: counts.completed },
     { key: 'POSTED', label: 'Đã xuất bản', icon: 'check_circle', count: counts.posted },
-    { key: 'FAILED', label: 'Lỗi Ảnh AI', icon: 'broken_image', count: counts.failed },
-    { key: 'VIDEO_FAILED', label: 'Lỗi Video Render', icon: 'videocam_off', count: counts.videoFailed || 0 },
+    { key: 'FAILED', label: 'Lỗi Đăng Fanpage', icon: 'sync_problem', count: counts.failed },
+    { key: 'VIDEO_FAILED', label: 'Lỗi Video Reel', icon: 'videocam_off', count: counts.videoFailed || 0 },
   ];
 
   return (
