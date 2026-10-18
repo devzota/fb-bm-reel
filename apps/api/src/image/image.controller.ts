@@ -827,15 +827,17 @@ export class ZTTeamImageController {
 
     const engine = (post.page as any)?.video_engine || 'hook_image';
 
-    if (engine === 'hook_image') {
-      /** Kích hoạt render Video Hook sắc nét 10s tự động ngay tại server */
+    if (engine === 'hook_image' || engine === 'text_story') {
+      /** Kích hoạt render Video Hook sắc nét / Text Story 10s tự động ngay tại server */
       this.hookVideoService.ztteam_renderHookVideo(id).catch(err => {
-        this.logger.error(`[Manual Hook Video Error] ${err.message}`);
+        this.logger.error(`[Manual Hook/Text Story Video Error] ${err.message}`);
       });
 
       return {
         success: true,
-        message: 'Đang tiến hành tạo Video Hook 10s sắc nét từ ảnh...',
+        message: engine === 'text_story'
+          ? 'Đang tiến hành tạo Video Text Story 10s kịch tính từ bài viết...'
+          : 'Đang tiến hành tạo Video Hook 10s sắc nét từ ảnh...',
         post: { ...post, video_status: 'PENDING' },
       };
     }

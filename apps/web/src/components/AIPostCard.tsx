@@ -328,8 +328,13 @@ export default function ZTTeamAIPostCard({
 
             {item.video_url ? (
               <div className="flex items-center gap-1 pointer-events-auto shrink-0">
-                {/** Nhãn phân biệt loại video: Video từ ảnh vs Video Muse */}
-                {item.video_engine === 'hook_image' || item.video_url.includes('hook_reel_') || (!item.video_engine && !item.video_url.includes('muse_reel_')) ? (
+                {/** Nhãn phân biệt loại video: Video Hook từ ảnh vs Text Story vs Video Muse */}
+                {item.video_engine === 'text_story' || item.video_url.includes('text_story_reel_') ? (
+                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 backdrop-blur-md flex items-center gap-0.5 shadow-md" title="Text Story Reel 10s (Kính Mờ Frosted Glass & Censor)">
+                    <span className="material-symbols-outlined text-[12px]">auto_stories</span>
+                    STORY
+                  </span>
+                ) : item.video_engine === 'hook_image' || item.video_url.includes('hook_reel_') || (!item.video_engine && !item.video_url.includes('muse_reel_')) ? (
                   <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-amber-500/25 text-amber-300 border border-amber-500/40 backdrop-blur-md flex items-center gap-0.5 shadow-md" title="Video Reel 10s tạo từ hình ảnh và kịch bản Hook sắc nét">
                     <span className="material-symbols-outlined text-[12px]">smart_display</span>
                     REEL

@@ -353,10 +353,10 @@ export class ZTTeamCrawlerService {
       /** ZTTeam: Nếu Fanpage cấu hình đăng Reel hoặc Mixed và chọn engine hook_image (mặc định), tự động render Video Hook sắc nét */
       if (shouldAutoQueueVideo) {
         const engine = (targetPage as any).video_engine || 'hook_image';
-        if (engine === 'hook_image') {
-          this.logger.log(`[Auto Hook Video] Tự động render video hook 10s cho bài viết ${imgRecord.id} (Page: ${targetPage.name})`);
+        if (engine === 'hook_image' || engine === 'text_story') {
+          this.logger.log(`[Auto Video] Tự động render video ${engine} 10s cho bài viết ${imgRecord.id} (Page: ${targetPage.name})`);
           this.hookVideoService.ztteam_renderHookVideo(imgRecord.id).catch(err => {
-            this.logger.error(`[Auto Hook Video Error] ${err.message}`);
+            this.logger.error(`[Auto Video Error] ${err.message}`);
           });
         }
       }

@@ -782,6 +782,129 @@ CRITICAL REQUIREMENTS:
   }
 
   /**
+   * ZTTeam: Định dạng nội dung câu chuyện cho Text Story Reel (9:16 Frosted Glass)
+   * - Bao gồm 1 câu Hook mở đầu kịch tính trong ngoặc kép (Quote)
+   * - Tiếp theo là 5-6 đoạn văn dày dặn (~250 - 280 từ) bám sát 100% cốt truyện gốc
+   * - Tự động bọc từ khóa cao trào bằng <span class="hl">...</span>
+   * - Lấp kín card 1575px, để trống đúng ~10% ở đáy màn hình
+   */
+  async ztteam_generateTextStoryCardContent(
+    title: string,
+    content: string,
+  ): Promise<{ hookQuote: string; paragraphs: string[]; plainText: string }> {
+    const cleanTitle = (title || '').replace(/<[^>]*>?/gm, '').trim();
+    const cleanContent = (content || '').replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
+
+    const systemPrompt = `You are a master viral Facebook Story copywriter specializing in high-suspense Text Story Reels.
+Based strictly on the provided real story:
+Title: "${cleanTitle}"
+Story Details:
+"${cleanContent.substring(0, 4500)}"
+
+Task:
+Format and condense this real story into a dense, electrifying viral Text Story for a 9:16 vertical card.
+
+CRITICAL REQUIREMENTS:
+1. TRUTHFUL TO ORIGINAL: Every character, quote, and detail must come strictly from the provided story.
+2. FIRST LINE: A dramatic, quote-based opening hook line (1 short sentence in quotation marks, e.g. "Get in the back, Lena. Paige needs your seat.")
+3. STORY BODY: Exactly 5 or 6 paragraphs.
+4. TOTAL LENGTH: Total word count across the body MUST be between 250 and 280 words so it fills the screen card completely without leaving empty space.
+5. HIGHLIGHTS: In each paragraph, wrap 1 or 2 dramatic phrases or key quotes in <span class="hl">...</span>.
+6. SUSPENSE CLIFFHANGER: End on an intense high-stakes moment or revelation that compels the viewer to read the rest in the comments.
+7. FORMAT: Return the opening hook quote on line 1, followed by a blank line, followed by the 5-6 paragraphs separated by blank lines. No numbering, no markdown headers.`;
+
+    try {
+      const settings = await this.getSettings();
+      let rawResponse = '';
+
+      if (settings.activeProvider === 'gemini' && settings.geminiKey) {
+        const { GoogleGenerativeAI } = require('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(settings.geminiKey);
+        const model = genAI.getGenerativeModel({
+          model: 'gemini-1.5-flash',
+          generationConfig: {
+            temperature: 0.75,
+            maxOutputTokens: 600,
+          },
+        });
+        const result = await model.generateContent(systemPrompt);
+        rawResponse = result.response.text();
+      } else {
+        const OpenAI = require('openai').default;
+        const isDeepseek = settings.activeProvider === 'deepseek' && settings.deepseekKey;
+        const rawKey = isDeepseek ? settings.deepseekKey : settings.openaiKey;
+        const apiKey = (rawKey || '').trim();
+        const baseURL = isDeepseek ? 'https://api.deepseek.com' : undefined;
+        const modelName = isDeepseek ? 'deepseek-chat' : 'gpt-4o-mini';
+
+        if (apiKey) {
+          const openai = new OpenAI({ apiKey, baseURL });
+          const response = await openai.chat.completions.create({
+            model: modelName,
+            messages: [
+              { role: 'user', content: systemPrompt },
+            ],
+            max_tokens: 600,
+            temperature: 0.75,
+          });
+          rawResponse = response.choices[0]?.message?.content || '';
+        }
+      }
+
+      if (rawResponse && rawResponse.trim().length > 100) {
+        const chunks = rawResponse
+          .trim()
+          .split(/\n\s*\n/)
+          .map(p => p.trim())
+          .filter(p => p.length > 0);
+
+        if (chunks.length >= 4) {
+          const hookQuote = chunks[0].replace(/^["'“”]+|["'“”]+$/g, '').trim();
+          const paragraphs = chunks.slice(1);
+          const plainText = paragraphs.join('\n\n').replace(/<[^>]*>?/gm, '');
+          return {
+            hookQuote: `“${hookQuote}”`,
+            paragraphs,
+            plainText,
+          };
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`AI text story generation warning: ${err.message}. Chuyển sang trích xuất trực tiếp.`);
+    }
+
+    /** ZTTeam: Fallback thông minh nếu AI lỗi hoặc không có API key - tự động trích xuất 260 từ từ nội dung gốc */
+    return this.ztteam_fallbackTextStoryExtract(cleanTitle, cleanContent);
+  }
+
+  /**
+   * ZTTeam: Thuật toán fallback trích xuất 250 - 280 từ trực tiếp từ bài viết gốc
+   */
+  private ztteam_fallbackTextStoryExtract(
+    title: string,
+    content: string,
+  ): { hookQuote: string; paragraphs: string[]; plainText: string } {
+    const hookQuote = title.length > 5 ? `“${title}”` : '“A Story You Need To Hear...”';
+    const rawWords = content.split(/\s+/).filter(w => w.length > 0);
+    const targetWords = rawWords.slice(0, 270);
+
+    /** Chia 270 từ thành 5-6 đoạn */
+    const paragraphCount = 5;
+    const chunkSize = Math.ceil(targetWords.length / paragraphCount);
+    const paragraphs: string[] = [];
+
+    for (let i = 0; i < targetWords.length; i += chunkSize) {
+      let pText = targetWords.slice(i, i + chunkSize).join(' ');
+      /** Tự động bôi vàng từ khóa bằng regex trên một số từ/cụm từ cảm xúc */
+      pText = pText.replace(/\b(husband|wife|marriage|hospital|police|secret|truth|money|million|house|car|lawyer|divorce|pain|tears|betrayal|revenge|company)\b/gi, (m) => `<span class="hl">${m}</span>`);
+      paragraphs.push(pText);
+    }
+
+    const plainText = paragraphs.join('\n\n').replace(/<[^>]*>?/gm, '');
+    return { hookQuote, paragraphs, plainText };
+  }
+
+  /**
    * ZTTeam: Sáng tạo prompt chuẩn cho Avatar (1:1) và Cover (16:9) bám sát chủ đề Story và chèn tên Page vào cả 2 ảnh
    */
   async ztteam_generateBrandingPrompts(params: {

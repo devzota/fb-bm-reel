@@ -79,8 +79,6 @@ export class ZTTeamRenderCron implements OnApplicationBootstrap {
           is_posted: false,
           status: { not: 'POSTED' },
           video_status: 'PENDING',
-          video_url: null,
-          image_url: { not: null },
         },
         include: { page: true },
         orderBy: { created_at: 'desc' },

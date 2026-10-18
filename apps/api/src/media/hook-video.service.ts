@@ -201,6 +201,71 @@ export function ztteam_getPageReelPalette(pageIdOrName?: string) {
   return ZTTEAM_REEL_PALETTES[index];
 }
 
+/**
+ * ZTTeam: 3 bộ tông màu điện ảnh cao cấp cho Text Story Reel (Tuyệt đối KHÔNG dùng màu Hồng/Tím)
+ */
+export const ZTTEAM_TEXT_STORY_THEMES = [
+  {
+    id: 'style1_cyan',
+    name: 'Midnight Teal & Cyan',
+    bgGradient: 'radial-gradient(ellipse at 85% 15%, #072635 0%, #030d15 45%, #010408 100%)',
+    aura1: 'rgba(6, 182, 212, 0.55)',
+    aura2: 'rgba(13, 148, 136, 0.60)',
+    aura3: 'rgba(217, 119, 6, 0.40)',
+    cardBg: 'rgba(6, 20, 32, 0.46)',
+    cardBorder: '1.8px solid rgba(56, 189, 248, 0.35)',
+    cardGlow: '0 32px 85px rgba(0, 0, 0, 0.88), 0 0 45px rgba(6, 182, 212, 0.22)',
+    hookColor: '#fbbf24',
+    hlColor: '#fbbf24',
+    textColor: '#e2e8f0',
+    ctaColor: '#38bdf8',
+    verifiedColor: '#1877F2',
+  },
+  {
+    id: 'style2_amber',
+    name: 'Obsidian Bronze & Champagne Gold',
+    bgGradient: 'radial-gradient(ellipse at 75% 20%, #2a1a08 0%, #0f0a04 45%, #030201 100%)',
+    aura1: 'rgba(245, 158, 11, 0.52)',
+    aura2: 'rgba(180, 83, 9, 0.60)',
+    aura3: 'rgba(30, 41, 59, 0.65)',
+    cardBg: 'rgba(24, 16, 9, 0.48)',
+    cardBorder: '1.8px solid rgba(245, 158, 11, 0.38)',
+    cardGlow: '0 32px 85px rgba(0, 0, 0, 0.9), 0 0 45px rgba(245, 158, 11, 0.25)',
+    hookColor: '#fde047',
+    hlColor: '#fde047',
+    textColor: '#f1ede6',
+    ctaColor: '#fbbf24',
+    verifiedColor: '#1877F2',
+  },
+  {
+    id: 'style3_cobalt',
+    name: 'Deep Space Cobalt & Electric Cyan',
+    bgGradient: 'radial-gradient(ellipse at 80% 25%, #0c204c 0%, #040c1e 45%, #01040c 100%)',
+    aura1: 'rgba(37, 99, 235, 0.52)',
+    aura2: 'rgba(14, 165, 233, 0.55)',
+    aura3: 'rgba(30, 58, 138, 0.62)',
+    cardBg: 'rgba(8, 18, 42, 0.46)',
+    cardBorder: '1.8px solid rgba(96, 165, 250, 0.38)',
+    cardGlow: '0 32px 85px rgba(0, 0, 0, 0.88), 0 0 45px rgba(37, 99, 235, 0.25)',
+    hookColor: '#facc15',
+    hlColor: '#facc15',
+    textColor: '#e6edf5',
+    ctaColor: '#60a5fa',
+    verifiedColor: '#1877F2',
+  },
+];
+
+export function ztteam_getTextStoryTheme(pageIdOrName?: string) {
+  if (!pageIdOrName) return ZTTEAM_TEXT_STORY_THEMES[0];
+  let hash = 0;
+  for (let i = 0; i < pageIdOrName.length; i++) {
+    hash = (hash << 5) - hash + pageIdOrName.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % ZTTEAM_TEXT_STORY_THEMES.length;
+  return ZTTEAM_TEXT_STORY_THEMES[index];
+}
+
 @Injectable()
 export class ZTTeamHookVideoService {
   private readonly logger = new Logger('ZTTeamHookVideoService');
@@ -214,13 +279,13 @@ export class ZTTeamHookVideoService {
   ) { }
 
   /**
-   * ZTTeam: Render video Reel 10s siêu sắc nét từ hình ảnh và kịch bản Hook 3 đoạn
+   * ZTTeam: Render video Reel 10s siêu sắc nét từ hình ảnh Hook hoặc Text Story kính mờ Frosted Glass
    */
   async ztteam_renderHookVideo(
     imageId: string,
-    options?: { bgmFilename?: string; forceRegenHook?: boolean }
+    options?: { bgmFilename?: string; forceRegenHook?: boolean; videoEngine?: string }
   ): Promise<{ success: boolean; videoUrl?: string; error?: string }> {
-    this.logger.log(`===== START HOOK VIDEO RENDER: image=${imageId} =====`);
+    this.logger.log(`===== START HOOK/TEXT STORY VIDEO RENDER: image=${imageId} =====`);
 
     const imageRecord = await this.prisma.ztteam_images.findUnique({
       where: { id: imageId },
@@ -252,7 +317,9 @@ export class ZTTeamHookVideoService {
     let browser: any = null;
 
     try {
-      /** 1. Chuẩn bị ảnh nguồn (Ưu tiên ảnh 2K output.png, sau đó đến image_url, cuối cùng là original.png) */
+      const engine = options?.videoEngine || (imageRecord.page as any)?.video_engine || 'hook_image';
+
+      /** 1. Chuẩn bị ảnh nguồn (đối với hook_image thì bắt buộc, text_story có thể linh hoạt) */
       const localImageCandidates = [
         path.join(ztteam_getImagesPath(imageId), 'output.png'),
         imageRecord.image_url ? path.join(process.cwd(), imageRecord.image_url.replace(/^\//, '')) : '',
@@ -261,13 +328,9 @@ export class ZTTeamHookVideoService {
       ].filter(p => p && fs.existsSync(p));
 
       let sourceImagePath = localImageCandidates[0];
-      if (!sourceImagePath) {
+      if (!sourceImagePath && engine !== 'text_story') {
         throw new Error('Không tìm thấy file ảnh gốc để render video');
       }
-
-      const imageBase64 = fs.readFileSync(sourceImagePath).toString('base64');
-      const imageExt = path.extname(sourceImagePath).replace('.', '') || 'png';
-      const imageDataUri = `data:image/${imageExt};base64,${imageBase64}`;
 
       /** 2. Chuẩn bị thông tin Fanpage */
       const pageName = imageRecord.page?.name || 'ZTTeam Daily Story';
@@ -300,6 +363,397 @@ export class ZTTeamHookVideoService {
           this.logger.warn(`Không thể nạp avatar cho Fanpage "${pageName}": ${e?.message || e}`);
         }
       }
+
+      /** =========================================================================
+       * NHÁNH 1: ĐỊNH DẠNG TEXT STORY REEL (FROSTED GLASS CARD 9:16, ĐÁY CHỪA 10%)
+       * ========================================================================= */
+      if (engine === 'text_story') {
+        const pageKey = imageRecord.page?.id || imageRecord.page?.name || imageRecord.page_id || 'ztteam_story';
+        const theme = ztteam_getTextStoryTheme(pageKey);
+        this.logger.log(`[Text Story Reel] Fanpage "${pageName}" sử dụng bộ theme: ${theme.name}`);
+
+        const rawStory = imageRecord.ai_caption || imageRecord.wp_post_title || '';
+        const storyData = await this.aiService.ztteam_generateTextStoryCardContent(
+          imageRecord.wp_post_title || 'Compelling Story',
+          rawStory
+        );
+
+        const wordCount = storyData.plainText.trim().split(/\s+/).length;
+        let fontSize = 33.5;
+        let lineHeight = 1.28;
+        let pGap = 14;
+
+        if (wordCount < 230) {
+          fontSize = 35.5;
+          lineHeight = 1.32;
+          pGap = 16;
+        } else if (wordCount > 290) {
+          fontSize = 31.5;
+          lineHeight = 1.24;
+          pGap = 12;
+        }
+
+        const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,700&family=Montserrat:ital,wght@0,600;0,700;0,800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 1080px;
+      height: 1920px;
+      background: #020509;
+      font-family: 'Barlow Condensed', sans-serif !important;
+      color: #ffffff;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /** NỀN TỐI SÂU DARK SEAMLESS ĐA LỚP GRADIENT */
+    .bg-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1920px;
+      background: ${theme.bgGradient};
+      z-index: 1;
+    }
+
+    /** QUẦNG SÁNG AURA 1 */
+    .aura-1 {
+      position: absolute;
+      top: 60px;
+      right: -80px;
+      width: 820px;
+      height: 820px;
+      background: radial-gradient(circle, ${theme.aura1} 0%, transparent 70%);
+      filter: blur(100px);
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /** QUẦNG SÁNG AURA 2 */
+    .aura-2 {
+      position: absolute;
+      top: 600px;
+      left: -140px;
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, ${theme.aura2} 0%, transparent 70%);
+      filter: blur(95px);
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /** QUẦNG SÁNG AURA 3 */
+    .aura-3 {
+      position: absolute;
+      bottom: 80px;
+      right: -100px;
+      width: 840px;
+      height: 840px;
+      background: radial-gradient(circle, ${theme.aura3} 0%, transparent 70%);
+      filter: blur(105px);
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /** HỌA TIẾT HẠT SÂU CINEMATIC */
+    .noise-grid {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1920px;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 30px 30px;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    /** CỤM FANPAGE HEADER NẰM TRỰC TIẾP TRÊN NỀN */
+    .external-header {
+      position: absolute;
+      top: 68px;
+      left: 60px;
+      width: 960px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      z-index: 10;
+    }
+
+    .avatar-wrapper {
+      position: relative;
+      width: 72px;
+      height: 72px;
+      flex-shrink: 0;
+    }
+
+    .page-avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 2px solid ${theme.hookColor};
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65);
+      object-fit: cover;
+    }
+
+    .avatar-fallback {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 2px solid ${theme.hookColor};
+      background: linear-gradient(135deg, #0e3e4b 0%, #061622 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 800;
+      color: #ffffff;
+      font-family: 'Montserrat', sans-serif;
+    }
+
+    .header-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .page-name-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /** TÊN FANPAGE ĐƯỢC LÀM MỜ BLUR ĐÚNG CHUẨN VIRAL CENSOR */
+    .page-name-blurred {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 27px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.3px;
+      line-height: 1.15;
+      filter: blur(5px);
+      user-select: none;
+    }
+
+    .verified-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .post-submeta {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 18px;
+      font-weight: 500;
+      color: #94a3b8;
+      letter-spacing: -0.2px;
+    }
+
+    /** THẺ BÀI VIẾT KÍNH MỜ (FROSTED GLASS) CAO 1575px, ĐÁY CHỈ CHỪA ĐÚNG ~10% (190px) */
+    .glass-card-wrapper {
+      position: absolute;
+      top: 155px;
+      left: 60px;
+      width: 960px;
+      height: 1575px;
+      z-index: 10;
+    }
+
+    .glass-card {
+      width: 100%;
+      height: 100%;
+      background: ${theme.cardBg};
+      backdrop-filter: blur(36px);
+      -webkit-backdrop-filter: blur(36px);
+      border-radius: 36px;
+      border: ${theme.cardBorder};
+      box-shadow: ${theme.cardGlow}, inset 0 1px 2px rgba(255, 255, 255, 0.18);
+      padding: 40px 46px 34px 46px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .card-top-content {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /** TIÊU ĐỀ MỞ MÀN CÂU CHUYỆN (VÀNG KIM NỔI BẬT) */
+    .story-hook {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 44px;
+      font-weight: 700;
+      color: ${theme.hookColor};
+      line-height: 1.20;
+      margin-bottom: 18px;
+      letter-spacing: -0.2px;
+      text-shadow: 0 0 16px rgba(245, 158, 11, 0.4);
+    }
+
+    /** THÂN BÀI VIẾT TYPOGRAPHY BARLOW CONDENSED LẤP KÍN CARD */
+    .story-body {
+      display: flex;
+      flex-direction: column;
+      gap: ${pGap}px;
+    }
+
+    .story-p {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: ${fontSize}px;
+      font-weight: 600;
+      line-height: ${lineHeight};
+      color: ${theme.textColor};
+      letter-spacing: -0.15px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.75);
+    }
+
+    /** TỪ KHÓA ĐẮT GIÁ HIGHLIGHT VÀNG KIM ÁNH SÁNG */
+    .hl {
+      color: ${theme.hlColor} !important;
+      font-weight: 700;
+      text-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
+    }
+
+    /** NÚT KÊU GỌI HÀNH ĐỘNG CLIFFHANGER */
+    .cta-row {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      width: 100%;
+      padding-top: 12px;
+    }
+
+    .cta-text {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 37px;
+      font-weight: 700;
+      color: ${theme.ctaColor};
+      text-shadow: 0 0 18px rgba(56, 189, 248, 0.7);
+      letter-spacing: 0.3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-canvas"></div>
+  <div class="aura-1"></div>
+  <div class="aura-2"></div>
+  <div class="aura-3"></div>
+  <div class="noise-grid"></div>
+
+  <!-- HEADER FANPAGE (VỚI TÊN FANPAGE ĐƯỢC LÀM MỜ BLUR NHƯ ẢNH MẪU VIRAL) -->
+  <div class="external-header">
+    <div class="avatar-wrapper">
+      ${pageAvatarDataUri 
+        ? `<img src="${pageAvatarDataUri}" class="page-avatar" />`
+        : `<div class="avatar-fallback">${pageName.substring(0, 2).toUpperCase()}</div>`
+      }
+    </div>
+    <div class="header-meta">
+      <div class="page-name-row">
+        <span class="page-name-blurred">${pageName}</span>
+        <svg class="verified-icon" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" fill="${theme.verifiedColor}"/>
+          <path d="M7.5 12L10.5 15L16.5 9" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <span class="post-submeta">4 hours ago • A Text Story • facebook.com</span>
+    </div>
+  </div>
+
+  <!-- THẺ BÀI VIẾT KÍNH MỜ FROSTED GLASS CAO 1575px - CHỈ TRỐNG ĐÚNG 10% Ở ĐÁY -->
+  <div class="glass-card-wrapper">
+    <div class="glass-card">
+      <div class="card-top-content">
+        <div class="story-hook">${storyData.hookQuote}</div>
+        <div class="story-body">
+          ${storyData.paragraphs.map(p => `<p class="story-p">${p}</p>`).join('\n          ')}
+        </div>
+      </div>
+      <div class="cta-row">
+        <div class="cta-text">Continue Reading...</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+        browser = await puppeteer.launch({
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        });
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
+        await page.setContent(htmlContent, { waitUntil: 'load' });
+        await page.evaluateHandle('document.fonts.ready');
+
+        const framePngPath = path.join(tempDir, 'text_story_frame.png');
+        await page.screenshot({ path: framePngPath, omitBackground: false, type: 'png' });
+        await browser.close();
+        browser = null;
+
+        const preferredBgm = options?.bgmFilename || imageRecord.page?.default_bgm || 'kiss_of_spring.mp4';
+        const audioPath = this.bgmService.ztteam_resolveBgmPath(preferredBgm);
+
+        const videosDir = ztteam_getVideosPath();
+        if (!fs.existsSync(videosDir)) {
+          fs.mkdirSync(videosDir, { recursive: true });
+        }
+
+        const timestamp = Date.now();
+        const outputFilename = `text_story_reel_${imageId}_${timestamp}.mp4`;
+        const outputVideoPath = path.join(videosDir, outputFilename);
+        const duration = 10;
+
+        const ffmpegCmd = `ffmpeg -y -loop 1 -t ${duration} -i "${framePngPath}" -t ${duration} -i "${audioPath}" -filter_complex "[0:v]scale='1080*(1+0.025*t/${duration})':-1:eval=frame:flags=bicubic,crop=1080:1920:(in_w-1080)/2:(in_h-1920)/2[vout];[1:a]atrim=0:${duration},asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.5,afade=t=out:st=${duration - 1.5}:d=1.5,volume=0.85[aout]" -map "[vout]" -map "[aout]" -c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p -r 30 -b:v 8M -maxrate 12M -bufsize 16M -c:a aac -b:a 192k -t ${duration} "${outputVideoPath}"`;
+
+        await new Promise<void>((resolve, reject) => {
+          exec(ffmpegCmd, { maxBuffer: 1024 * 1024 * 30 }, (error, stdout, stderr) => {
+            if (error) {
+              this.logger.error(`FFmpeg text story render error: ${error.message}\n${stderr}`);
+              reject(new Error(stderr || error.message));
+            } else {
+              this.logger.log(`FFmpeg text story render completed: ${outputFilename}`);
+              resolve();
+            }
+          });
+        });
+
+        const videoUrl = `/storage/videos/${outputFilename}`;
+
+        const updated = await this.prisma.ztteam_images.update({
+          where: { id: imageId },
+          data: {
+            video_url: videoUrl,
+            video_status: 'COMPLETED',
+            video_engine: 'text_story',
+            video_created_at: new Date(),
+            error_log: null,
+          },
+        });
+
+        this.eventEmitter.emit('image.updated', updated);
+
+        try {
+          if (fs.existsSync(framePngPath)) fs.unlinkSync(framePngPath);
+        } catch (e) { /** Bỏ qua */ }
+
+        return { success: true, videoUrl };
+      }
+
+      /** =========================================================================
+       * NHÁNH 2: ĐỊNH DẠNG HOOK IMAGE REEL (ẢNH 2K + 3 ĐOẠN HOOK MONTSERRAT)
+       * ========================================================================= */
+      const imageBase64 = fs.readFileSync(sourceImagePath).toString('base64');
+      const imageExt = path.extname(sourceImagePath).replace('.', '') || 'png';
+      const imageDataUri = `data:image/${imageExt};base64,${imageBase64}`;
 
       /** 3. Tạo kịch bản Hook 3 đoạn bám sát nội dung gốc bằng AI */
       let hookHtml = '';

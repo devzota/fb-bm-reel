@@ -783,12 +783,15 @@ export default function FacebookPageSettings() {
                       onChange={setVideoEngine}
                       options={[
                         { value: 'hook_image', label: 'Tạo từ Ảnh Hook & Âm Nhạc (Sắc nét 1080x1920 10s - Mặc định)' },
+                        { value: 'text_story', label: 'Text Story Reel (Kính Mờ Frosted Glass 9:16, Censor Tên Page, Đọc Kịch Tính 10s)' },
                         { value: 'muse', label: 'Tạo bằng Motion AI (Muse Motion Reel)' }
                       ]}
                     />
                     <p className="text-[11px] text-fb-text-muted mt-1.5 leading-relaxed">
                       {videoEngine === 'hook_image' 
                         ? 'Tự động sử dụng ảnh 2K kết hợp kịch bản Hook 3 đoạn kịch tính do AI tạo bám sát bài viết gốc, font Montserrat và hòa âm nhạc nền 10s cực nét.'
+                        : videoEngine === 'text_story'
+                        ? 'Định dạng Text Story lan truyền: Card kính mờ Frosted Glass 9:16 cao 1575px, che mờ tên Fanpage, font Barlow Condensed sắc nét, highlight từ khóa vàng kịch tính và zoom Ken Burns 10s.'
                         : 'Đưa bài viết vào hàng đợi để Worker ngoài xử lý chuyển động bằng Muse Motion AI.'
                       }
                     </p>
