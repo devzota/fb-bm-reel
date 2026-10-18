@@ -135,8 +135,8 @@ export class ZTTeamCrawlerService {
           currentTemplateId = 'source_original';
           this.logger.log(`Đã kích hoạt thành công ảnh gốc dự phòng: ${image2kUrl}`);
         } else {
-          /** Nếu ngay cả ảnh gốc dự phòng cũng không có thì mới ném lỗi ra ngoài */
-          throw sangTaoErr;
+          /** ZTTeam: Nếu không có cả ảnh gốc lẫn ảnh AI -> Bỏ qua bài viết, không đủ điều kiện */
+          throw new Error(`[KHÔNG ĐỦ ĐIỀU KIỆN] Bài viết không có ảnh gốc dự phòng và SangTao.ai không thể tạo ảnh (${sangTaoErr.message})`);
         }
       }
     } else {

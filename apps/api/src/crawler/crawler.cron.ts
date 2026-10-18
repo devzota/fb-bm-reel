@@ -245,12 +245,12 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
       }
 
       try {
-        /** Check history: Skip already successful or intentionally skipped articles, allow retry for FAILED */
+        /** Check history: Skip already successful, permanently skipped, or previously failed articles */
         const history = await this.prisma.ztteam_crawl_history.findUnique({
           where: { source_id_url: { source_id: source.id, url } }
         });
 
-        if (history && (history.status === 'SUCCESS' || history.status === 'SKIPPED_NOT_ARTICLE')) {
+        if (history && (history.status === 'SUCCESS' || history.status.startsWith('SKIPPED') || history.status === 'FAILED')) {
           continue;
         }
 
@@ -272,12 +272,13 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
         processedCount++;
         attemptCount++;
       } catch (err: any) {
-        /** Kiểm tra nếu lỗi do vi phạm cổng kiểm duyệt bài viết (trang chuyên mục hoặc không đạt chuẩn nội dung) */
-        const isNonArticle = err.message?.includes('Không phải bài viết hợp lệ') ||
-                             err.message?.includes('Nội dung không đạt tiêu chuẩn bài viết');
+        /** ZTTeam: Kiểm tra nếu lỗi do vi phạm cổng kiểm duyệt bài viết hoặc bài viết không đủ điều kiện ảnh/nội dung */
+        const isConditionUnmet = err.message?.includes('Không phải bài viết hợp lệ') ||
+                                 err.message?.includes('Nội dung không đạt tiêu chuẩn bài viết') ||
+                                 err.message?.includes('[KHÔNG ĐỦ ĐIỀU KIỆN]');
 
-        if (isNonArticle) {
-          this.logger.log(`[TỰ ĐỘNG BỎ QUA] URL không phải bài viết: ${url} (${err.message})`);
+        if (isConditionUnmet) {
+          this.logger.log(`[TỰ ĐỘNG BỎ QUA] URL không đáp ứng điều kiện: ${url} (${err.message})`);
           try {
             await this.prisma.ztteam_crawl_history.upsert({
               where: { source_id_url: { source_id: source.id, url } },
@@ -328,7 +329,7 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
           sourceUrl: url,
           step: failStep,
           rawError: extractedError,
-          nextAction: 'Hệ thống đã tự động lưu lại và sẽ thử lại ở chu kỳ tiếp theo (sau 5 phút).',
+          nextAction: 'Hệ thống đã tự động BỎ QUA bài viết này để tiếp tục cào các bài tiếp theo, không lặp lại.',
           memberEmail,
         });
 
@@ -337,8 +338,8 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
         try {
           await this.prisma.ztteam_crawl_history.upsert({
             where: { source_id_url: { source_id: source.id, url } },
-            create: { source_id: source.id, url, status: 'FAILED' },
-            update: { status: 'FAILED' }
+            create: { source_id: source.id, url, status: 'SKIPPED_FAILED' },
+            update: { status: 'SKIPPED_FAILED' }
           });
         } catch (e) {
           /** Ignore upsert error */
