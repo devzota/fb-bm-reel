@@ -188,15 +188,23 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
               <span className="text-fb-text-muted text-[10px] sm:text-[11px] truncate block">ID: {page.id}</span>
             </div>
 
-            {/** Badges phân loại Doanh Nghiệp (BM), Meta App & Thời hạn Token */}
+            {/** Badges phân loại Doanh Nghiệp (BM) hoặc Tài Khoản Cá Nhân, Meta App & Thời hạn Token */}
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
               <span
                 onClick={(e) => { e.stopPropagation(); navigate('/facebook/business-hub'); }}
-                className="cursor-pointer px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 flex items-center gap-1 transition-colors"
-                title="Bấm để mở Hub Quản Lý Doanh Nghiệp"
+                className={`cursor-pointer px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 transition-colors ${
+                  page.accountType === 'PERSONAL' || !page.businessId
+                    ? 'bg-slate-700/40 hover:bg-slate-700/60 text-slate-300 border-slate-600/30'
+                    : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/20'
+                }`}
+                title={page.accountType === 'PERSONAL' || !page.businessId ? 'Tài Khoản Facebook Cá Nhân' : 'Bấm để mở Hub Quản Lý Doanh Nghiệp'}
               >
-                <span className="material-symbols-outlined text-[12px]">corporate_fare</span>
-                <span className="truncate max-w-[120px]">{page.businessName || 'Doanh Nghiệp BM'}</span>
+                <span className="material-symbols-outlined text-[12px]">
+                  {page.accountType === 'PERSONAL' || !page.businessId ? 'person' : 'corporate_fare'}
+                </span>
+                <span className="truncate max-w-[120px]">
+                  {page.businessName || (page.accountType === 'PERSONAL' ? 'Tài Khoản Cá Nhân' : 'Doanh Nghiệp BM')}
+                </span>
               </span>
 
               {page.appName && (
@@ -206,12 +214,19 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
                 </span>
               )}
 
-              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 ${(page.tokenExpiry === 'NEVER' || page.accountType === 'SYSTEM_USER')
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 ${
+                (page.tokenExpiry === 'NEVER' || page.accountType === 'SYSTEM_USER') && page.businessId
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                   : 'bg-slate-700/50 text-slate-300 border-slate-600/40'
-                }`}>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                <span>{(page.tokenExpiry === 'NEVER' || page.accountType === 'SYSTEM_USER') ? 'Vĩnh Viễn' : 'Token'}</span>
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  (page.tokenExpiry === 'NEVER' || page.accountType === 'SYSTEM_USER') && page.businessId
+                    ? 'bg-emerald-400'
+                    : 'bg-blue-400'
+                }`}></span>
+                <span>
+                  {(page.tokenExpiry === 'NEVER' || page.accountType === 'SYSTEM_USER') && page.businessId ? 'Vĩnh Viễn' : 'Token User'}
+                </span>
               </span>
             </div>
           </div>

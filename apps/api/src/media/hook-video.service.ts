@@ -12,8 +12,8 @@ import puppeteer from 'puppeteer';
 import axios from 'axios';
 
 /**
- * Danh sách 6 bộ màu Dark Seamless sang trọng cho Video Reel
- * Tuyệt đối không dùng màu Hồng và Tím theo quy chuẩn ZTTeam
+ * Danh sách 24 bộ màu Dark Seamless sang trọng, cao cấp cho Video Reel
+ * Tuyệt đối không dùng màu Hồng và Tím theo quy chuẩn ZTTeam & AGENTS.md
  */
 export const ZTTEAM_REEL_PALETTES = [
   {
@@ -57,6 +57,132 @@ export const ZTTEAM_REEL_PALETTES = [
     highlightColor: '#f3c35b',
     accentBorder: '#f3c35b',
     avatarGrad: 'linear-gradient(135deg, #0284c7, #075985)',
+  },
+  {
+    name: 'Forest Pine (Xanh Rừng Thông)',
+    background: 'linear-gradient(180deg, #08281a 0%, #051a11 50%, #03130c 100%)',
+    highlightColor: '#34d399',
+    accentBorder: '#10b981',
+    avatarGrad: 'linear-gradient(135deg, #15803d, #064e3b)',
+  },
+  {
+    name: 'Royal Sapphire (Xanh Lam Hoàng Gia)',
+    background: 'linear-gradient(180deg, #0c2340 0%, #07172b 50%, #040f1c 100%)',
+    highlightColor: '#60a5fa',
+    accentBorder: '#3b82f6',
+    avatarGrad: 'linear-gradient(135deg, #2563eb, #1e3a8a)',
+  },
+  {
+    name: 'Charcoal Black (Đen Than Hoạt Tính)',
+    background: 'linear-gradient(180deg, #18181b 0%, #101013 50%, #09090b 100%)',
+    highlightColor: '#fbbf24',
+    accentBorder: '#eab308',
+    avatarGrad: 'linear-gradient(135deg, #52525b, #27272a)',
+  },
+  {
+    name: 'Rustic Walnut (Nâu Gỗ Óc Chó)',
+    background: 'linear-gradient(180deg, #331c0e 0%, #201108 50%, #140a05 100%)',
+    highlightColor: '#f59e0b',
+    accentBorder: '#d97706',
+    avatarGrad: 'linear-gradient(135deg, #92400e, #451a03)',
+  },
+  {
+    name: 'Deep Abyss (Xanh Thẳm Đại Dương)',
+    background: 'linear-gradient(180deg, #071a2c 0%, #04101c 50%, #020912 100%)',
+    highlightColor: '#38bdf8',
+    accentBorder: '#0284c7',
+    avatarGrad: 'linear-gradient(135deg, #0369a1, #082f49)',
+  },
+  {
+    name: 'Jade Green (Xanh Ngọc Thạch)',
+    background: 'linear-gradient(180deg, #0a2e23 0%, #051d16 50%, #03140f 100%)',
+    highlightColor: '#4ade80',
+    accentBorder: '#22c55e',
+    avatarGrad: 'linear-gradient(135deg, #16a34a, #14532d)',
+  },
+  {
+    name: 'Dark Copper (Đồng Đỏ Trầm)',
+    background: 'linear-gradient(180deg, #351a10 0%, #22100a 50%, #150a06 100%)',
+    highlightColor: '#fb923c',
+    accentBorder: '#ea580c',
+    avatarGrad: 'linear-gradient(135deg, #b45309, #7c2d12)',
+  },
+  {
+    name: 'Titanium Gray (Xám Titan Ánh Kim)',
+    background: 'linear-gradient(180deg, #1e293b 0%, #131b27 50%, #0b0f17 100%)',
+    highlightColor: '#38bdf8',
+    accentBorder: '#0ea5e9',
+    avatarGrad: 'linear-gradient(135deg, #475569, #1e293b)',
+  },
+  {
+    name: 'Golden Bronze (Đồng Vàng Ánh Kim)',
+    background: 'linear-gradient(180deg, #2a200b 0%, #1b1407 50%, #110d04 100%)',
+    highlightColor: '#facc15',
+    accentBorder: '#eab308',
+    avatarGrad: 'linear-gradient(135deg, #a16207, #713f12)',
+  },
+  {
+    name: 'Deep Olive (Xanh Rêu Quân Đội)',
+    background: 'linear-gradient(180deg, #1e2610 0%, #13190a 50%, #0c1006 100%)',
+    highlightColor: '#a3e635',
+    accentBorder: '#84cc16',
+    avatarGrad: 'linear-gradient(135deg, #4d7c0f, #365314)',
+  },
+  {
+    name: 'Midnight Cobalt (Xanh Lam Đêm Muộn)',
+    background: 'linear-gradient(180deg, #0f172a 0%, #080d19 50%, #020617 100%)',
+    highlightColor: '#93c5fd',
+    accentBorder: '#3b82f6',
+    avatarGrad: 'linear-gradient(135deg, #1d4ed8, #0f172a)',
+  },
+  {
+    name: 'Dark Amber (Hổ Phách Sẫm)',
+    background: 'linear-gradient(180deg, #2e1b09 0%, #1d1105 50%, #120a03 100%)',
+    highlightColor: '#f59e0b',
+    accentBorder: '#d97706',
+    avatarGrad: 'linear-gradient(135deg, #b45309, #78350f)',
+  },
+  {
+    name: 'Smoky Quartz (Thạch Anh Khói)',
+    background: 'linear-gradient(180deg, #202024 0%, #151518 50%, #0d0d10 100%)',
+    highlightColor: '#e2e8f0',
+    accentBorder: '#94a3b8',
+    avatarGrad: 'linear-gradient(135deg, #64748b, #334155)',
+  },
+  {
+    name: 'Burgundy Dusk (Đỏ Rượu Vang Trầm)',
+    background: 'linear-gradient(180deg, #2e1114 0%, #1d090b 50%, #130608 100%)',
+    highlightColor: '#fca5a5',
+    accentBorder: '#ef4444',
+    avatarGrad: 'linear-gradient(135deg, #991b1b, #450a0a)',
+  },
+  {
+    name: 'Oceanic Slate (Xanh Xám Sóng Ngầm)',
+    background: 'linear-gradient(180deg, #0f242c 0%, #09171c 50%, #050f13 100%)',
+    highlightColor: '#2dd4bf',
+    accentBorder: '#0d9488',
+    avatarGrad: 'linear-gradient(135deg, #0f766e, #134e4a)',
+  },
+  {
+    name: 'Dark Terracotta (Đất Nung Đêm Sẫm)',
+    background: 'linear-gradient(180deg, #31170d 0%, #1f0e08 50%, #130905 100%)',
+    highlightColor: '#fdba74',
+    accentBorder: '#f97316',
+    avatarGrad: 'linear-gradient(135deg, #c2410c, #7c2d12)',
+  },
+  {
+    name: 'Nordic Shadow (Bóng Tối Bắc Âu)',
+    background: 'linear-gradient(180deg, #151d28 0%, #0e131b 50%, #080c10 100%)',
+    highlightColor: '#7dd3fc',
+    accentBorder: '#0284c7',
+    avatarGrad: 'linear-gradient(135deg, #0369a1, #0c4a6e)',
+  },
+  {
+    name: 'Iron Carbon (Thép Carbon Đen Sâu)',
+    background: 'linear-gradient(180deg, #14171a 0%, #0c0e10 50%, #070809 100%)',
+    highlightColor: '#fcd34d',
+    accentBorder: '#f59e0b',
+    avatarGrad: 'linear-gradient(135deg, #4b5563, #111827)',
   },
 ];
 
@@ -103,6 +229,12 @@ export class ZTTeamHookVideoService {
 
     if (!imageRecord) {
       throw new Error(`Không tìm thấy bài viết ${imageId}`);
+    }
+
+    /** ZTTeam: Người dùng yêu cầu chỉ render bài CHƯA ĐĂNG, bài đã đăng rồi bỏ qua để tiết kiệm tài nguyên */
+    if (imageRecord.is_posted && !options?.forceRegenHook) {
+      this.logger.log(`Bài viết ${imageId} đã đăng lên Fanpage (is_posted = true), bỏ qua không render video.`);
+      return { success: true, videoUrl: imageRecord.video_url || undefined };
     }
 
     /** Cập nhật trạng thái đang xử lý */

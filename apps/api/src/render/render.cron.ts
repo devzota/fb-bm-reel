@@ -4,6 +4,7 @@ import { OnApplicationBootstrap } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ZTTeamRenderProcessor } from './render.processor';
 import { ZTTeamWordpressService } from '../wordpress/wordpress.service';
+import { ZTTeamHookVideoService } from '../media/hook-video.service';
 
 @Injectable()
 export class ZTTeamRenderCron implements OnApplicationBootstrap {
@@ -14,6 +15,7 @@ export class ZTTeamRenderCron implements OnApplicationBootstrap {
     private readonly prisma: PrismaService,
     private readonly renderProcessor: ZTTeamRenderProcessor,
     private readonly wordpressService: ZTTeamWordpressService,
+    private readonly hookVideoService: ZTTeamHookVideoService,
   ) {}
 
   onApplicationBootstrap() {
@@ -38,6 +40,9 @@ export class ZTTeamRenderCron implements OnApplicationBootstrap {
     this.logger.log('Starting Auto-Render Cron...');
 
     try {
+      /** ZTTeam: Tự động quét và Render Hook Video 10s cho các bài viết CHƯA ĐĂNG đang ở trạng thái PENDING */
+      await this.ztteam_autoRenderPendingVideos();
+
       /** Find all pages that have auto create enabled and format is reel */
       const pages = await this.prisma.ztteam_pages.findMany({
         where: { auto_create_enabled: true, is_active: true, post_format: { in: ['reel', 'mixed'] } },
@@ -60,6 +65,46 @@ export class ZTTeamRenderCron implements OnApplicationBootstrap {
     } finally {
       this.isRunning = false;
       this.logger.log('Auto-Render Cron finished.');
+    }
+  }
+
+  /**
+   * ZTTeam: Tự động nhặt các bài viết CHƯA ĐĂNG có video_status = 'PENDING' để Render Video Hook 10s
+   * Tối đa 2 video mỗi phút để chạy ngầm êm ái, không làm quá tải CPU/RAM trên VPS
+   */
+  private async ztteam_autoRenderPendingVideos() {
+    try {
+      const pendingImages = await this.prisma.ztteam_images.findMany({
+        where: {
+          is_posted: false,
+          status: { not: 'POSTED' },
+          video_status: 'PENDING',
+          video_url: null,
+          image_url: { not: null },
+        },
+        include: { page: true },
+        orderBy: { created_at: 'desc' },
+        take: 2,
+      });
+
+      if (pendingImages.length === 0) return;
+
+      this.logger.log(`[Auto Hook Video Worker] Tìm thấy ${pendingImages.length} bài viết PENDING (chưa đăng), bắt đầu tự động render...`);
+
+      for (const img of pendingImages) {
+        try {
+          const res = await this.hookVideoService.ztteam_renderHookVideo(img.id);
+          if (res.success) {
+            this.logger.log(`[Auto Hook Video Worker] Render thành công video cho bài ${img.id} (Page: ${img.page?.name || 'Manual Studio'}): ${res.videoUrl}`);
+          } else {
+            this.logger.warn(`[Auto Hook Video Worker] Render bài ${img.id} trả về lỗi: ${res.error}`);
+          }
+        } catch (err: any) {
+          this.logger.error(`[Auto Hook Video Worker] Lỗi render bài ${img.id}: ${err.message}`);
+        }
+      }
+    } catch (e: any) {
+      this.logger.error(`[Auto Hook Video Worker] Lỗi truy vấn pending videos: ${e.message}`);
     }
   }
 
