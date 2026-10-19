@@ -558,8 +558,8 @@ export class ZTTeamDashboardService {
         /** ZTTeam: Truy vấn video views và blue_reels_play_count (reach duy nhất) chuẩn API Facebook */
         if (page.page_token_encrypted && page.fb_page_id) {
           try {
-            const vidUrl = new URL(`https://graph.facebook.com/v25.0/${page.fb_page_id}/videos`);
-            vidUrl.searchParams.set('fields', 'id,views,created_time,description,picture,permalink_url,video_insights.metric(blue_reels_play_count){values}');
+            const vidUrl = new URL(`https://graph.facebook.com/v21.0/${page.fb_page_id}/videos`);
+            vidUrl.searchParams.set('fields', 'id,views,created_time,description,picture,thumbnails{uri,is_preferred,height,width},permalink_url,video_insights.metric(blue_reels_play_count){values}');
             vidUrl.searchParams.set('limit', '100');
             vidUrl.searchParams.set('access_token', page.page_token_encrypted);
 
@@ -578,10 +578,14 @@ export class ZTTeamDashboardService {
                 systemVideoReach += vReach;
 
                 const sysPost = systemPostsByFbId.get(v.id);
+                /** ZTTeam: Ưu tiên lấy Thumbnail video Reel thực tế từ Facebook CDN (chuẩn HD hoặc picture), đồng bộ chuẩn xác với trang chi tiết Fanpage */
+                const ztteam_fbVideoThumb = v.thumbnails?.data?.find((t: any) => t.is_preferred)?.uri || v.picture;
+                const ztteam_finalThumbnail = ztteam_fbVideoThumb || sysPost?.thumbnail_url || (sysPost?.image_url && sysPost.image_url.startsWith('http') ? sysPost.image_url : null) || 'https://placehold.co/1080x1920/2563eb/white?text=ZTTeam';
+
                 allSystemVideoObjects.push({
                   id: v.id,
                   title: sysPost?.wp_post_title || v.description?.slice(0, 100) || 'Video do hệ thống đăng',
-                  thumbnail: sysPost?.thumbnail_url || sysPost?.image_url || v.picture || 'https://placehold.co/1080x1920/2563eb/white?text=ZTTeam',
+                  thumbnail: ztteam_finalThumbnail,
                   pageName: page.name,
                   date: v.created_time || sysPost?.posted_at,
                   views: vViews,
