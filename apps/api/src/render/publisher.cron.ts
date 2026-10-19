@@ -433,7 +433,10 @@ export class ZTTeamPublisherCron {
         currentRetries = 3;
         await this.prisma.ztteam_pages.update({
           where: { id: page.id },
-          data: { auto_publish_enabled: false }
+          data: {
+            auto_publish_enabled: false,
+            token_status: 'checkpoint_required'
+          }
         }).catch(() => {});
         this.logger.warn(`[CIRCUIT BREAKER] Page ${page.name} kích hoạt bảo vệ do Facebook yêu cầu xác nhận danh tính. Tạm ngưng auto-publish.`);
       }
@@ -607,7 +610,10 @@ export class ZTTeamPublisherCron {
         currentRetries = 3;
         await this.prisma.ztteam_pages.update({
           where: { id: page.id },
-          data: { auto_publish_enabled: false }
+          data: {
+            auto_publish_enabled: false,
+            token_status: 'checkpoint_required'
+          }
         }).catch(() => {});
         this.logger.warn(`[CIRCUIT BREAKER] Page ${page.name} kích hoạt bảo vệ do Facebook yêu cầu xác nhận danh tính. Tạm ngưng auto-publish.`);
       }

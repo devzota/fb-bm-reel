@@ -31,6 +31,7 @@ export default function FacebookPageSettings() {
   const [pageName, setPageName] = useState('');
   const [fbPageId, setFbPageId] = useState('');
   const [pageAvatar, setPageAvatar] = useState<string | null>(null);
+  const [isCheckpointBlocked, setIsCheckpointBlocked] = useState<boolean>(false);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
@@ -242,6 +243,7 @@ export default function FacebookPageSettings() {
       setPageName(data.name || 'Fanpage Settings');
       setFbPageId(data.fb_page_id || '');
       setPageAvatar(data.avatar || null);
+      setIsCheckpointBlocked(Boolean(data.isCheckpointBlocked));
       setTags(data.tags || []);
       setPostFormat(data.post_format || 'image');
       setVideoEngine(data.video_engine || 'hook_image');
@@ -587,8 +589,34 @@ export default function FacebookPageSettings() {
                 <span className="material-symbols-outlined text-[14px]">arrow_back</span> Quay lại danh sách
               </button>
             </div>
-            <h3 className="text-2xl font-black text-fb-text tracking-tight flex items-center gap-3">
-              {pageName}
+            <h3 className="text-2xl font-black text-fb-text tracking-tight flex items-center gap-3 flex-wrap">
+              <span>{pageName}</span>
+              {isCheckpointBlocked && (
+                <div className="relative group/cpBadge shrink-0 cursor-help">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm animate-pulse">
+                    <span className="material-symbols-outlined text-sm text-amber-400">shield_lock</span>
+                    <span>Cần xác minh danh tính</span>
+                  </span>
+
+                  {/** Tooltip giải thích chi tiết khi hover */}
+                  <div className="absolute left-0 top-full mt-2 w-80 p-3.5 bg-[#0b1329] rounded-xl border border-amber-500/30 shadow-2xl z-50 invisible group-hover/cpBadge:visible opacity-0 group-hover/cpBadge:opacity-100 transition-all pointer-events-none text-left">
+                    <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs mb-1.5">
+                      <span className="material-symbols-outlined text-sm">warning</span>
+                      <span>Facebook Yêu Cầu Xác Minh Danh Tính</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Facebook tạm khóa quyền đăng bài của Trang này (Mã 368 / Subcode 4854002) do nghi ngờ spam hoặc thao tác nhanh. Hệ thống đã tự động dừng xuất bản để bảo vệ BM và các Page khác.
+                    </p>
+                    <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] text-emerald-400 font-medium space-y-1">
+                      <div className="font-bold text-slate-200">👉 Hướng dẫn mở khóa:</div>
+                      <div>1. Mở ứng dụng Facebook trên điện thoại của Admin</div>
+                      <div>2. Chuyển sang Trang <b>{pageName}</b></div>
+                      <div>3. Đăng thử 1 bài viết bất kỳ (ví dụ: "Test") và làm theo thông báo xác nhận danh tính trên điện thoại</div>
+                      <div>4. Sau khi đăng được, bật lại nút "Tự động đăng" bên dưới và bấm Lưu cài đặt</div>
+                    </div>
+                  </div>
+                </div>
+              )}
               {fbPageId && (
                 <a href={`https://facebook.com/${fbPageId}`} target="_blank" rel="noopener noreferrer" className="text-xs px-3 py-1 bg-fb-blue/10 text-fb-blue border border-fb-blue/20 rounded-full hover:bg-fb-blue/20 flex items-center gap-1 font-semibold transition-colors">
                   <span className="material-symbols-outlined text-[16px]">open_in_new</span> Xem Fanpage
@@ -738,6 +766,23 @@ export default function FacebookPageSettings() {
                   </button>
                 </div>
               </div>
+
+              {isCheckpointBlocked && (
+                <div className="bg-amber-500/10 p-4 rounded-xl border border-amber-500/30 text-xs text-amber-200 space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-amber-400 text-sm">
+                    <span className="material-symbols-outlined text-[20px]">shield_lock</span>
+                    <span>Fanpage đang bị Facebook tạm chặn đăng (Mã 368 / Subcode 4854002)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Hệ thống đã tự động kích hoạt Circuit Breaker tắt tự động đăng để bảo vệ BM và các Page khác. Để tiếp tục xuất bản:
+                  </p>
+                  <ol className="list-decimal list-inside text-[11px] text-amber-300 space-y-1 bg-black/30 p-2.5 rounded-lg border border-amber-500/20 font-medium">
+                    <li>Mở app Facebook trên điện thoại Admin ➔ Chuyển sang Page <b>{pageName}</b></li>
+                    <li>Đăng thử 1 bài viết ("Test") ➔ Hoàn tất thông báo xác nhận danh tính trên điện thoại</li>
+                    <li>Quay lại đây, gạt bật lại nút <b>"Tự động đăng"</b> ở trên và bấm <b>Lưu cài đặt</b></li>
+                  </ol>
+                </div>
+              )}
 
               <div className="bg-fb-surface-hover/20 p-3 rounded-xl border border-fb-surface-hover/40 text-[11px] text-fb-text-muted">
                 <strong className="text-fb-text font-bold">Chế độ tự động đăng: </strong>

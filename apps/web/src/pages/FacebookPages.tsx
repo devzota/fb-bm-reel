@@ -176,7 +176,35 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="font-bold text-base text-fb-text truncate leading-snug">{page.name}</p>
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <p className="font-bold text-base text-fb-text truncate leading-snug">{page.name}</p>
+              {page.isCheckpointBlocked && (
+                <div className="relative group/cpBadge shrink-0 cursor-help">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm animate-pulse">
+                    <span className="material-symbols-outlined text-[13px] text-amber-400">shield_lock</span>
+                    <span>Cần xác minh danh tính</span>
+                  </span>
+
+                  {/** Tooltip giải thích chi tiết khi hover */}
+                  <div className="absolute left-0 sm:left-1/2 sm:-translate-x-1/2 top-full mt-2 w-80 p-3.5 bg-[#0b1329] rounded-xl border border-amber-500/30 shadow-2xl z-50 invisible group-hover/cpBadge:visible opacity-0 group-hover/cpBadge:opacity-100 transition-all pointer-events-none text-left">
+                    <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs mb-1.5">
+                      <span className="material-symbols-outlined text-sm">warning</span>
+                      <span>Facebook Yêu Cầu Xác Minh Danh Tính</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Facebook tạm khóa quyền đăng bài của Trang này (Mã 368 / Subcode 4854002) do nghi ngờ spam hoặc thao tác nhanh. Hệ thống đã tự động dừng xuất bản để bảo vệ BM và các Page khác.
+                    </p>
+                    <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] text-emerald-400 font-medium space-y-1">
+                      <div className="font-bold text-slate-200">👉 Hướng dẫn mở khóa:</div>
+                      <div>1. Mở ứng dụng Facebook trên điện thoại của Admin</div>
+                      <div>2. Chuyển sang Trang <b>{page.name}</b></div>
+                      <div>3. Đăng thử 1 bài viết bất kỳ (ví dụ: "Test") và làm theo thông báo xác nhận danh tính trên điện thoại</div>
+                      <div>4. Sau khi đăng được, vào Cài đặt Page trên web và bật lại nút tự động đăng</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2 mt-1 text-[11px] font-medium text-fb-text-muted">
               <span className="truncate block">Nick: <b className="text-blue-400">{page.ownerName || 'Admin'}</b></span>
               <span className="hidden sm:inline">•</span>
@@ -235,6 +263,10 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
         {isExpired ? (
           <span className="px-2.5 py-1 bg-red-500/20 text-red-400 rounded-full text-[10px] font-extrabold shrink-0 flex items-center gap-1 shadow-sm">
             <span className="material-symbols-outlined text-xs">error</span> Lỗi Token
+          </span>
+        ) : page.isCheckpointBlocked ? (
+          <span className="px-2.5 py-1 bg-amber-500/20 text-amber-300 rounded-full text-[10px] font-extrabold shrink-0 flex items-center gap-1 shadow-sm border border-amber-500/30">
+            <span className="material-symbols-outlined text-xs text-amber-400">shield_lock</span> Chờ xác minh
           </span>
         ) : (
           <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-[10px] font-extrabold shrink-0 flex items-center gap-1 shadow-sm">

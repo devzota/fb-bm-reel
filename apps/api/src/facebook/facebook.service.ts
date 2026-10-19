@@ -630,6 +630,31 @@ export class ZTTeamFacebookService {
       orderBy: { name: 'asc' }
     });
 
+    /** ZTTeam: Nhận diện các Fanpage đang bị Facebook yêu cầu xác minh danh tính (Subcode 4854002) */
+    const checkpointPageIds = new Set<string>();
+    pages.forEach(p => {
+      if (p.token_status === 'checkpoint_required') {
+        checkpointPageIds.add(p.id);
+      }
+    });
+
+    try {
+      const recentFailedPosts = await this.prisma.ztteam_images.findMany({
+        where: {
+          page_id: { in: pages.map(p => p.id) },
+          status: 'FAILED',
+          error_log: { contains: '4854002' },
+          updated_at: { gte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) }
+        },
+        select: { page_id: true }
+      });
+      recentFailedPosts.forEach(post => {
+        if (post.page_id) checkpointPageIds.add(post.page_id);
+      });
+    } catch (e: any) {
+      /** Bỏ qua lỗi phụ */
+    }
+
     const result = await Promise.all(pages.map(async p => {
       const times = await this.ztteam_computePageTimesAndNextVideo(p);
 
@@ -689,6 +714,7 @@ export class ZTTeamFacebookService {
         pendingImagesCount,
         pendingReelsCount,
         totalPendingCount: pendingImagesCount + pendingReelsCount,
+        isCheckpointBlocked: checkpointPageIds.has(p.id),
         /** We do not send accessToken back to frontend for security */
       };
     }));
@@ -717,11 +743,30 @@ export class ZTTeamFacebookService {
 
     const times = await this.ztteam_computePageTimesAndNextVideo(page);
 
+    let isCheckpointBlocked = page.token_status === 'checkpoint_required';
+    if (!isCheckpointBlocked) {
+      try {
+        const recentFailed = await this.prisma.ztteam_images.findFirst({
+          where: {
+            page_id: page.id,
+            status: 'FAILED',
+            error_log: { contains: '4854002' },
+            updated_at: { gte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) }
+          },
+          select: { id: true }
+        });
+        if (recentFailed) isCheckpointBlocked = true;
+      } catch (e: any) {
+        /** Bỏ qua lỗi phụ */
+      }
+    }
+
     return {
       id: page.id,
       fb_page_id: page.fb_page_id,
       name: page.name,
       avatar: page.avatar,
+      isCheckpointBlocked,
       tags: page.tags,
       cover_url: (page as any).cover_url || null,
       branding: {
@@ -788,31 +833,38 @@ export class ZTTeamFacebookService {
     }
 
     /** Update main page fields */
+    const updateData: any = {
+      tags: config.tags,
+      post_format: config.post_format,
+      video_engine: config.video_engine || 'hook_image',
+      default_bgm: config.default_bgm !== undefined ? config.default_bgm : null,
+      auto_publish_enabled: config.auto_publish_enabled !== undefined ? config.auto_publish_enabled : true,
+      add_link_to_caption: config.add_link_to_caption,
+      add_link_to_comment: config.add_link_to_comment,
+      schedule_mode: config.schedule_mode,
+      schedule_fixed_times: config.schedule_fixed_times,
+      schedule_immediate_gap_minutes: config.schedule_immediate_gap_minutes,
+      default_reel_template_id: config.default_reel_template_id,
+      default_image_template_id: config.default_image_template_id,
+      auto_create_enabled: config.auto_create_enabled,
+      auto_scan_interval_hours: config.auto_scan_interval_hours,
+      auto_scan_batch_size: config.auto_scan_batch_size,
+      auto_queue_limit: config.auto_queue_limit,
+      auto_max_post_age_days: config.auto_max_post_age_days,
+      ai_tone: config.ai_tone,
+      ai_caption_length: config.ai_caption_length,
+      ai_custom_prompt: config.ai_custom_prompt,
+      voice_speed: config.voice_speed,
+    };
+
+    /** ZTTeam: Nếu người dùng bật lại tự động đăng, khôi phục token_status về active để xóa cảnh báo */
+    if (config.auto_publish_enabled === true && page.token_status === 'checkpoint_required') {
+      updateData.token_status = 'active';
+    }
+
     await this.prisma.ztteam_pages.update({
       where: { id: page.id },
-      data: {
-        tags: config.tags,
-        post_format: config.post_format,
-        video_engine: config.video_engine || 'hook_image',
-        default_bgm: config.default_bgm !== undefined ? config.default_bgm : null,
-        auto_publish_enabled: config.auto_publish_enabled !== undefined ? config.auto_publish_enabled : true,
-        add_link_to_caption: config.add_link_to_caption,
-        add_link_to_comment: config.add_link_to_comment,
-        schedule_mode: config.schedule_mode,
-        schedule_fixed_times: config.schedule_fixed_times,
-        schedule_immediate_gap_minutes: config.schedule_immediate_gap_minutes,
-        default_reel_template_id: config.default_reel_template_id,
-        default_image_template_id: config.default_image_template_id,
-        auto_create_enabled: config.auto_create_enabled,
-        auto_scan_interval_hours: config.auto_scan_interval_hours,
-        auto_scan_batch_size: config.auto_scan_batch_size,
-        auto_queue_limit: config.auto_queue_limit,
-        auto_max_post_age_days: config.auto_max_post_age_days,
-        ai_tone: config.ai_tone,
-        ai_caption_length: config.ai_caption_length,
-        ai_custom_prompt: config.ai_custom_prompt,
-        voice_speed: config.voice_speed,
-      }
+      data: updateData
     });
 
     /** Handle sources */
@@ -1017,6 +1069,11 @@ export class ZTTeamFacebookService {
           { params: { access_token: page.page_token_encrypted } }
         )
       );
+
+      await this.prisma.ztteam_pages.update({
+        where: { id: page.id },
+        data: { token_status: 'active' }
+      }).catch(() => {});
 
       return { success: true, postId: response.data.id };
     } catch (error: any) {
