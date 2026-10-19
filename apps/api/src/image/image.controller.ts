@@ -662,6 +662,18 @@ export class ZTTeamImageController {
    */
   @Get('pending-video')
   async ztteam_getPendingVideo(@Query('auto') auto?: string) {
+    /** 0. ZTTeam: Tự động giải phóng các job PROCESSING bị kẹt quá 15 phút do worker bị tắt */
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+    await this.prisma.ztteam_images.updateMany({
+      where: {
+        video_status: 'PROCESSING',
+        video_created_at: { lt: fifteenMinutesAgo },
+      },
+      data: {
+        video_status: 'PENDING',
+      },
+    });
+
     /** 1. Ưu tiên bài viết được đánh dấu PENDING (Kho Đăng Thủ Công hoặc Fanpage Reel/Mixed, chỉ lấy bài CHƯA đăng) */
     let post = await this.prisma.ztteam_images.findFirst({
       where: {
@@ -703,19 +715,20 @@ export class ZTTeamImageController {
         include: { page: true },
         orderBy: { created_at: 'desc' },
       });
-
-      /** Đánh dấu PENDING ngay để giao diện cập nhật và tránh lần poll tiếp theo bị trùng bài */
-      if (post) {
-        await this.prisma.ztteam_images.update({
-          where: { id: post.id },
-          data: { video_status: 'PENDING' },
-        });
-      }
     }
 
     if (!post) {
       return { success: true, hasJob: false };
     }
+
+    /** 3. ZTTeam: Đánh dấu PROCESSING ngay lập tức để chống xung đột giữa nhiều Worker/Acc chạy song song */
+    await this.prisma.ztteam_images.update({
+      where: { id: post.id },
+      data: {
+        video_status: 'PROCESSING',
+        video_created_at: new Date(),
+      },
+    });
 
     /** ZTTeam: Lấy trực tiếp nội dung caption hoặc title làm kịch bản video nguyên bản */
     const rawText = post.ai_caption || post.wp_post_title || '';

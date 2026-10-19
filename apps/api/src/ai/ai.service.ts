@@ -760,13 +760,38 @@ CRITICAL REQUIREMENTS:
       }
 
       if (rawResponse && rawResponse.trim().length > 30) {
-        const paragraphs = rawResponse
+        /** Tách đoạn văn ưu tiên theo ngắt dòng kép, sau đó đến ngắt dòng đơn */
+        let paragraphs = rawResponse
           .trim()
           .split(/\n\s*\n/)
           .map(p => p.trim())
           .filter(p => p.length > 0);
 
-        if (paragraphs.length >= 2) {
+        /** Nếu không có ngắt dòng kép, thử tách theo ngắt dòng đơn */
+        if (paragraphs.length < 2) {
+          const singleLineSplits = rawResponse
+            .trim()
+            .split(/\n+/)
+            .map(p => p.trim())
+            .filter(p => p.length > 15);
+          if (singleLineSplits.length >= 2) {
+            paragraphs = singleLineSplits;
+          }
+        }
+
+        /** Nếu vẫn chỉ có 1 đoạn văn nhưng nội dung dày dặn (> 80 ký tự), tự động chia theo câu hoặc giữ nguyên 1 đoạn hoàn chỉnh */
+        if (paragraphs.length === 1 && paragraphs[0].length >= 30) {
+          const sentences = paragraphs[0].match(/[^.!?]+[.!?]+(\s|$)/g);
+          if (sentences && sentences.length >= 2) {
+            const mid = Math.ceil(sentences.length / 2);
+            paragraphs = [
+              sentences.slice(0, mid).join('').trim(),
+              sentences.slice(mid).join('').trim()
+            ].filter(p => p.length > 0);
+          }
+        }
+
+        if (paragraphs.length >= 1) {
           const finalParagraphs = paragraphs.slice(0, 3);
           const hookHtml = finalParagraphs.map(p => `<p>${p}</p>`).join('\n');
           const plainText = finalParagraphs.join('\n\n').replace(/<[^>]*>?/gm, '');
@@ -774,7 +799,7 @@ CRITICAL REQUIREMENTS:
         }
       }
 
-      throw new Error(`AI không thể tạo đủ 3 đoạn kịch bản hook đạt chuẩn chất lượng (Kết quả trả về quá ngắn hoặc không đúng định dạng).`);
+      throw new Error(`AI không thể tạo kịch bản hook đạt chuẩn chất lượng (Kết quả trả về rỗng hoặc quá ngắn dưới 30 ký tự).`);
     } catch (err: any) {
       this.logger.error(`AI hook generation failed: ${err.message}`);
       throw new Error(`Lỗi AI tạo Hook kịch tính: ${err.message}`);
