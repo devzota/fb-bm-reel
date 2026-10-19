@@ -158,6 +158,14 @@ export function ztteam_translateErrorVi(errorMsg: string): string {
   ) {
     return 'Máy chủ Facebook (Graph API) gặp sự cố nội bộ tạm thời (HTTP 500 / Error Code 1). Hệ thống sẽ tự động hoãn và thử lại sau ít phút.';
   }
+  /** ZTTeam: Nhận diện đặc thù Checkpoint xác minh danh tính Facebook Code 368 / Subcode 4854002 */
+  if (
+    msg.includes('4854002') ||
+    msg.includes('xác nhận danh tính') ||
+    msg.includes('confirm your identity')
+  ) {
+    return 'Facebook kích hoạt Checkpoint xác minh danh tính (Code 368 / Subcode 4854002). Quản trị viên cần mở ứng dụng Facebook trên điện thoại, chuyển sang Page này và bấm Xác nhận.';
+  }
   if (
     msg.includes('368') ||
     msg.includes('going too fast') ||
