@@ -674,61 +674,70 @@ export class ZTTeamImageController {
       },
     });
 
-    /** 1. Ưu tiên bài viết được đánh dấu PENDING (Kho Đăng Thủ Công hoặc Fanpage Reel/Mixed, chỉ lấy bài CHƯA đăng) */
-    let post = await this.prisma.ztteam_images.findFirst({
-      where: {
-        status: 'COMPLETED',
-        is_posted: false,
-        image_url: { not: null },
-        video_status: 'PENDING',
-        OR: [
-          { page_id: null },
-          {
-            page: {
-              post_format: { in: ['reel', 'mixed'] },
-            },
+    let lockedId: string | null = null;
+
+    /** ZTTeam: Sử dụng Transaction kết hợp FOR UPDATE SKIP LOCKED để khoá nguyên tử 1 job duy nhất, chống xung đột nhiều worker/luồng */
+    await this.prisma.$transaction(async (tx) => {
+      /** 1. Ưu tiên bài viết được đánh dấu PENDING (Kho Đăng Thủ Công hoặc Fanpage Reel/Mixed, chỉ lấy bài CHƯA đăng) */
+      const lockedPendingRows = await tx.$queryRawUnsafe<Array<{ id: string }>>(`
+        SELECT zi.id 
+        FROM ztteam_images zi
+        LEFT JOIN ztteam_facebook_pages zp ON zi.page_id = zp.id
+        WHERE zi.status = 'COMPLETED'
+          AND zi.is_posted = false
+          AND zi.image_url IS NOT NULL
+          AND zi.video_status = 'PENDING'
+          AND (zi.page_id IS NULL OR zp.post_format IN ('reel', 'mixed'))
+        ORDER BY zi.updated_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+      `);
+
+      let chosenId = lockedPendingRows?.[0]?.id;
+
+      /** 2. Nếu auto=true và không có bài PENDING: Tự động lấy các bài cũ của Fanpage Reel/Mixed hoặc Kho Thủ Công chưa có video */
+      if (!chosenId && auto === 'true') {
+        const lockedAutoRows = await tx.$queryRawUnsafe<Array<{ id: string }>>(`
+          SELECT zi.id 
+          FROM ztteam_images zi
+          LEFT JOIN ztteam_facebook_pages zp ON zi.page_id = zp.id
+          WHERE zi.status = 'COMPLETED'
+            AND zi.is_posted = false
+            AND zi.image_url IS NOT NULL
+            AND zi.video_url IS NULL
+            AND zi.video_status IN ('NONE', 'FAILED')
+            AND (zi.page_id IS NULL OR zp.post_format IN ('reel', 'mixed'))
+          ORDER BY zi.created_at DESC
+          FOR UPDATE SKIP LOCKED
+          LIMIT 1
+        `);
+        chosenId = lockedAutoRows?.[0]?.id;
+      }
+
+      if (chosenId) {
+        await tx.ztteam_images.update({
+          where: { id: chosenId },
+          data: {
+            video_status: 'PROCESSING',
+            video_created_at: new Date(),
           },
-        ],
-      },
-      include: { page: true },
-      orderBy: { updated_at: 'asc' },
+        });
+        lockedId = chosenId;
+      }
     });
 
-    /** 2. Nếu auto=true và không có bài PENDING: Tự động lấy các bài cũ của Fanpage Reel/Mixed hoặc Kho Thủ Công chưa có video (Chỉ lấy bài CHƯA đăng, trạng thái NONE) */
-    if (!post && auto === 'true') {
-      post = await this.prisma.ztteam_images.findFirst({
-        where: {
-          status: 'COMPLETED',
-          is_posted: false,
-          image_url: { not: null },
-          video_url: null,
-          video_status: { in: ['NONE', 'FAILED'] },
-          OR: [
-            { page_id: null },
-            {
-              page: {
-                post_format: { in: ['reel', 'mixed'] },
-              },
-            },
-          ],
-        },
-        include: { page: true },
-        orderBy: { created_at: 'desc' },
-      });
+    if (!lockedId) {
+      return { success: true, hasJob: false };
     }
+
+    const post = await this.prisma.ztteam_images.findUnique({
+      where: { id: lockedId },
+      include: { page: true },
+    });
 
     if (!post) {
       return { success: true, hasJob: false };
     }
-
-    /** 3. ZTTeam: Đánh dấu PROCESSING ngay lập tức để chống xung đột giữa nhiều Worker/Acc chạy song song */
-    await this.prisma.ztteam_images.update({
-      where: { id: post.id },
-      data: {
-        video_status: 'PROCESSING',
-        video_created_at: new Date(),
-      },
-    });
 
     /** ZTTeam: Lấy trực tiếp nội dung caption hoặc title làm kịch bản video nguyên bản */
     const rawText = post.ai_caption || post.wp_post_title || '';
