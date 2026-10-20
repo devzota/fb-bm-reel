@@ -1,0 +1,16 @@
+{
+  "name": "ztteam-t2-muse-worker",
+  "version": "1.0.0",
+  "description": "ZTTeam Multi-Chrome Muse.ai Worker for t2.goxo.us",
+  "main": "ztteam_muse_worker.js",
+  "scripts": {
+    "acc1": "node ztteam_muse_worker.js --target=https://t2.goxo.us --chrome-port=9223 --worker-name=Acc-1",
+    "acc2": "node ztteam_muse_worker.js --target=https://t2.goxo.us --chrome-port=9224 --worker-name=Acc-2",
+    "acc3": "node ztteam_muse_worker.js --target=https://t2.goxo.us --chrome-port=9225 --worker-name=Acc-3"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "form-data": "^4.0.1",
+    "puppeteer-core": "^24.1.1"
+  }
+}

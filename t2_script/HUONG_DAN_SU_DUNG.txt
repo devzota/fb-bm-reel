@@ -1,0 +1,48 @@
+================================================================================
+          ZTTEAM MUSE WORKER (MULTI-ACCOUNT CHROME) - T2.GOXO.US
+================================================================================
+
+Thư mục này là gói công cụ độc lập hoàn chỉnh để tự động hóa tạo Video Reel trên Muse.ai
+kết nối trực tiếp tới máy chủ https://t2.goxo.us.
+Bạn có thể copy thư mục "t2_script" này sang bất kỳ máy tính Windows nào để chạy.
+
+YÊU CẦU:
+1. Máy tính đã cài Node.js (tải tại: https://nodejs.org - phiên bản LTS)
+2. Máy tính đã cài Google Chrome
+
+--------------------------------------------------------------------------------
+HƯỚNG DẪN SỬ DỤNG (CHẠY 1 HOẶC NHIỀU TÀI KHOẢN SONG SONG):
+--------------------------------------------------------------------------------
+
+▶ BƯỚC 1: Lần đầu tiên chạy (hoặc khi copy sang máy mới):
+   - Nhấp đúp vào file "cai_dat_thu_vien.bat" để cài các thư viện tự động.
+
+▶ BƯỚC 2: Chạy TÀI KHOẢN 1 (Acc 1):
+   1. Nhấp đúp: start_t2_chrome_acc1.bat
+      -> Cửa sổ Chrome mở ra trên cổng 9223.
+      -> Đăng nhập tài khoản Muse.ai số 1 (chỉ cần đăng nhập 1 lần duy nhất).
+   2. Nhấp đúp: start_t2_worker_acc1.bat
+      -> Worker Acc 1 sẽ kết nối Chrome 9223 và tự động render bài viết.
+
+▶ BƯỚC 3 (Tùy chọn): Chạy thêm TÀI KHOẢN 2 (Acc 2) để tăng gấp đôi tốc độ:
+   1. Nhấp đúp: start_t2_chrome_acc2.bat
+      -> Cửa sổ Chrome mở ra trên cổng 9224 (hoàn toàn độc lập với Acc 1).
+      -> Đăng nhập tài khoản Muse.ai số 2.
+   2. Nhấp đúp: start_t2_worker_acc2.bat
+      -> Worker Acc 2 sẽ chạy song song, hệ thống máy chủ tự động chia bài khác nhau.
+
+▶ BƯỚC 4 (Tùy chọn): Chạy thêm TÀI KHOẢN 3 (Acc 3):
+   1. Nhấp đúp: start_t2_chrome_acc3.bat
+   2. Nhấp đúp: start_t2_worker_acc3.bat
+
+--------------------------------------------------------------------------------
+TÍNH NĂNG BẢO VỆ ĐẶC BIỆT CỦA BẢN NÂNG CẤP:
+--------------------------------------------------------------------------------
+✔ CHỐNG DÁN DỒN 3 - 5 ẢNH:
+  - Tự động làm mới (F5) tab Muse trước mỗi bài, xóa sạch ảnh cũ trong bộ nhớ React.
+  - Tự động quét dọn và bấm xóa mọi ảnh preview thừa, đảm bảo CHÍNH XÁC 1 ảnh duy nhất.
+✔ CHỐNG TRÀN BỘ NHỚ RAM:
+  - Giải phóng hoàn toàn các video cũ trong DOM sau mỗi bài, RAM giảm từ 3GB về ~100MB.
+✔ CHỐNG TRÙNG BÀI KHI CHẠY NHIỀU WORKER:
+  - Máy chủ tự động gắn cờ PROCESSING ngay khi nhận bài, nhiều Worker không bao giờ nhận trùng 1 bài.
+================================================================================

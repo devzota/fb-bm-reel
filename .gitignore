@@ -47,3 +47,4 @@ apps/api/inspect_*.js
 apps/api/reset_sync.js
 reeldemo.png
 reel.ztteam.site.conf
+t2_script/worker_temp*/
