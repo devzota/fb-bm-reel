@@ -699,6 +699,10 @@ export class ZTTeamHookVideoService {
         await browser.close();
         browser = null;
 
+        if (!fs.existsSync(framePngPath)) {
+          throw new Error('Lỗi Puppeteer: File text_story_frame.png không được tạo thành công.');
+        }
+
         const preferredBgm = options?.bgmFilename || imageRecord.page?.default_bgm || 'kiss_of_spring.mp4';
         const audioPath = this.bgmService.ztteam_resolveBgmPath(preferredBgm);
 
@@ -717,8 +721,11 @@ export class ZTTeamHookVideoService {
         await new Promise<void>((resolve, reject) => {
           exec(ffmpegCmd, { maxBuffer: 1024 * 1024 * 30 }, (error, stdout, stderr) => {
             if (error) {
-              this.logger.error(`FFmpeg text story render error: ${error.message}\n${stderr}`);
-              reject(new Error(stderr || error.message));
+              const cleanStderr = (stderr || error.message || '').trim();
+              const lines = cleanStderr.split('\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('ffmpeg version') && !l.startsWith('built with') && !l.startsWith('configuration:'));
+              const actualError = lines.slice(-3).join(' | ') || error.message;
+              this.logger.error(`FFmpeg text story render error: ${error.message}\n${cleanStderr}`);
+              reject(new Error(actualError));
             } else {
               this.logger.log(`FFmpeg text story render completed: ${outputFilename}`);
               resolve();
@@ -984,6 +991,10 @@ export class ZTTeamHookVideoService {
       await browser.close();
       browser = null;
 
+      if (!fs.existsSync(overlayPngPath)) {
+        throw new Error('Lỗi Puppeteer: File frame_overlay.png không được tạo thành công.');
+      }
+
       /** 6. Lấy file nhạc nền BGM từ thư viện */
       const preferredBgm = options?.bgmFilename || imageRecord.page?.default_bgm;
       const audioPath = this.bgmService.ztteam_resolveBgmPath(preferredBgm);
@@ -1004,8 +1015,11 @@ export class ZTTeamHookVideoService {
       await new Promise<void>((resolve, reject) => {
         exec(ffmpegCmd, { maxBuffer: 1024 * 1024 * 30 }, (error, stdout, stderr) => {
           if (error) {
-            this.logger.error(`FFmpeg render error: ${error.message}\n${stderr}`);
-            reject(new Error(stderr || error.message));
+            const cleanStderr = (stderr || error.message || '').trim();
+            const lines = cleanStderr.split('\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('ffmpeg version') && !l.startsWith('built with') && !l.startsWith('configuration:'));
+            const actualError = lines.slice(-3).join(' | ') || error.message;
+            this.logger.error(`FFmpeg render error: ${error.message}\n${cleanStderr}`);
+            reject(new Error(actualError));
           } else {
             this.logger.log(`FFmpeg render completed: ${outputFilename}`);
             resolve();
@@ -1062,8 +1076,8 @@ export class ZTTeamHookVideoService {
           systemName: 'Render Video Hook (FFmpeg / AI)',
           fanpageName: pageTitle,
           postTitle,
-          step: extractedError.toLowerCase().includes('openai') || extractedError.toLowerCase().includes('gpt')
-            ? 'Bước 1/2: Tạo kịch bản 3 đoạn hook bằng OpenAI'
+          step: /openai|gpt|gemini|google|deepseek|ai/i.test(extractedError)
+            ? 'Bước 1/2: Tạo kịch bản 3 đoạn hook bằng AI'
             : 'Bước 2/2: Ghép phụ đề, hiệu ứng Ken Burns & lồng nhạc nền bằng FFmpeg',
           rawError: extractedError,
           nextAction: 'Hệ thống đã tự động bỏ qua video này và tiếp tục xử lý các bài tiếp theo.',
