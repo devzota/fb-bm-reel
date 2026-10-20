@@ -702,7 +702,7 @@ export class ZTTeamImageController {
           is_posted: false,
           image_url: { not: null },
           video_url: null,
-          video_status: 'NONE',
+          video_status: { in: ['NONE', 'FAILED'] },
           OR: [
             { page_id: null },
             {

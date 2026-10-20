@@ -234,28 +234,96 @@ async function ztteam_processVideoJobOnMuse(job, target) {
     if (!textarea) throw new Error('Không tìm thấy ô textarea để nhập prompt');
     await textarea.click();
 
-    /** Dán toàn bộ nội dung nguyên vẹn vào textarea */
+    /** Dán toàn bộ nội dung qua React prototype setter kết hợp execCommand để kích hoạt đầy đủ sự kiện */
     await page.evaluate((fullPrompt) => {
       const ta = document.querySelector('textarea');
       if (!ta) return;
       ta.focus();
-      ta.value = '';
-      document.execCommand('insertText', false, fullPrompt);
+      const proto = Object.getPrototypeOf(ta);
+      const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set || Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+      if (setter) {
+        setter.call(ta, fullPrompt);
+      } else {
+        ta.value = fullPrompt;
+      }
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      ta.dispatchEvent(new Event('change', { bubbles: true }));
+      document.execCommand('insertText', false, ' ');
+      document.execCommand('delete', false, null);
     }, job.prompt);
-    await new Promise(r => setTimeout(r, 1200));
+    await new Promise(r => setTimeout(r, 1000));
 
     console.log(`🚀 [${WORKER_NAME}] Đang bấm gửi tin nhắn...`);
-    const sentViaButton = await page.evaluate(() => {
-      const sendBtn = document.querySelector('button[aria-label="Gửi"], button[type="submit"]:not([aria-label="Đính kèm file"])');
-      if (sendBtn && !sendBtn.disabled) {
-        sendBtn.click();
+    await page.evaluate(() => {
+      const ta = document.querySelector('textarea');
+      if (!ta) return false;
+
+      const allButtons = Array.from(document.querySelectorAll('button'));
+      /** 1. Tìm nút có nhãn Gửi hoặc Send */
+      let targetBtn = allButtons.find(b => {
+        if (b.disabled) return false;
+        const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+        const title = (b.getAttribute('title') || '').toLowerCase();
+        const text = (b.innerText || '').toLowerCase();
+        return aria.includes('gửi') || aria.includes('send') || title.includes('gửi') || title.includes('send') || text.includes('gửi') || text.includes('send');
+      });
+
+      /** 2. Nếu không có nhãn, tìm nút tròn chứa SVG nằm trong hoặc gần khung nhập liệu */
+      if (!targetBtn && ta.parentElement) {
+        let parent = ta.parentElement;
+        for (let i = 0; i < 5 && parent; i++) {
+          const btns = Array.from(parent.querySelectorAll('button'));
+          for (const b of btns) {
+            if (b.disabled) continue;
+            const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+            if (aria.includes('đính kèm') || aria.includes('attach') || aria.includes('xóa') || aria.includes('close') || b.querySelector('input[type="file"]')) {
+              continue;
+            }
+            if (b.querySelector('svg')) {
+              targetBtn = b;
+              break;
+            }
+          }
+          if (targetBtn) break;
+          parent = parent.parentElement;
+        }
+      }
+
+      if (targetBtn && !targetBtn.disabled) {
+        targetBtn.click();
         return true;
       }
       return false;
     });
 
-    if (!sentViaButton) {
-      await page.keyboard.press('Enter');
+    /** Vòng lặp xác nhận tin nhắn đã thực sự được gửi đi */
+    let ztteam_isSent = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await new Promise(r => setTimeout(r, 1200));
+      const textareaContent = await page.evaluate(() => {
+        const ta = document.querySelector('textarea');
+        return ta ? ta.value.trim() : '';
+      });
+
+      if (!textareaContent) {
+        ztteam_isSent = true;
+        console.log(`✅ [${WORKER_NAME}] Đã xác nhận tin nhắn đã gửi đi (khung chat đã sạch)!`);
+        break;
+      }
+
+      console.log(`⚠️ [${WORKER_NAME}] Tin nhắn chưa bay (thử kích hoạt lại lần ${attempt + 1}/5)...`);
+      await page.evaluate(() => {
+        const ta = document.querySelector('textarea');
+        if (ta) ta.focus();
+      });
+
+      if (attempt % 2 === 0) {
+        await page.keyboard.down('Control');
+        await page.keyboard.press('Enter');
+        await page.keyboard.up('Control');
+      } else {
+        await page.keyboard.press('Enter');
+      }
     }
 
     /** 5. Chờ Muse.ai render xong video 15s */
