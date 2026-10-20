@@ -51,7 +51,7 @@ export class ZTTeamAIService {
       if (settings.activeProvider === 'gemini' && settings.geminiKey) {
         const { GoogleGenerativeAI } = require('@google/generative-ai');
         const genAI = new GoogleGenerativeAI(settings.geminiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
         const result = await model.generateContent(promptText);
         const response = await result.response;
         return response.text().trim();
@@ -132,7 +132,7 @@ BẮT BUỘC TRẢ VỀ DẠNG KẾT QUẢ ĐÚNG THEO ĐỊNH DẠNG JSON SAU (
       if (settings.activeProvider === 'gemini' && settings.geminiKey) {
         const genAI = new GoogleGenerativeAI(settings.geminiKey);
         const model = genAI.getGenerativeModel({
-          model: 'gemini-1.5-flash',
+          model: 'gemini-flash-latest',
           generationConfig: {
             responseMimeType: "application/json",
             temperature: 0.8,
@@ -287,7 +287,7 @@ BẮT BUỘC TRẢ VỀ DẠNG KẾT QUẢ ĐÚNG THEO ĐỊNH DẠNG JSON SAU (
       if (settings.activeProvider === 'gemini' && settings.geminiKey) {
         const genAI = new GoogleGenerativeAI(settings.geminiKey);
         const model = genAI.getGenerativeModel({
-          model: 'gemini-1.5-flash',
+          model: 'gemini-flash-latest',
           generationConfig: {
             responseMimeType: "application/json",
             temperature: 0.8,
@@ -573,7 +573,7 @@ YOU MUST RETURN EXACTLY ONE JSON OBJECT WITH THE FOLLOWING STRUCTURE:
         const { GoogleGenerativeAI } = require('@google/generative-ai');
         const genAI = new GoogleGenerativeAI(settings.geminiKey);
         const model = genAI.getGenerativeModel({
-          model: 'gemini-1.5-flash',
+          model: 'gemini-flash-latest',
           generationConfig: {
             responseMimeType: "application/json",
             temperature: 0.8,
@@ -658,7 +658,7 @@ CRITICAL RULES:
         const { GoogleGenerativeAI } = require('@google/generative-ai');
         const genAI = new GoogleGenerativeAI(settings.geminiKey);
         const model = genAI.getGenerativeModel({
-          model: 'gemini-1.5-flash',
+          model: 'gemini-flash-latest',
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 350,
@@ -729,7 +729,7 @@ CRITICAL REQUIREMENTS:
         const { GoogleGenerativeAI } = require('@google/generative-ai');
         const genAI = new GoogleGenerativeAI(settings.geminiKey);
         const model = genAI.getGenerativeModel({
-          model: 'gemini-1.5-flash',
+          model: 'gemini-flash-latest',
           generationConfig: {
             temperature: 0.75,
             maxOutputTokens: 300,
@@ -846,7 +846,7 @@ CRITICAL REQUIREMENTS:
         const { GoogleGenerativeAI } = require('@google/generative-ai');
         const genAI = new GoogleGenerativeAI(settings.geminiKey);
         const model = genAI.getGenerativeModel({
-          model: 'gemini-1.5-flash',
+          model: 'gemini-flash-latest',
           generationConfig: {
             temperature: 0.75,
             maxOutputTokens: 600,
