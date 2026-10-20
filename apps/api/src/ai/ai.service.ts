@@ -39,6 +39,43 @@ export class ZTTeamAIService {
   }
 
   /**
+   * ZTTeam: Gọi Gemini API với cơ chế tự động thử lại và Fallback model chống lỗi 503 High Demand
+   */
+  private async ztteam_callGeminiWithFallback(
+    geminiKey: string,
+    prompt: string,
+    options?: { jsonMode?: boolean; temperature?: number; maxTokens?: number }
+  ): Promise<string> {
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(geminiKey);
+
+    const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite'];
+    let lastError: any = null;
+
+    for (const modelName of modelsToTry) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            temperature: options?.temperature ?? 0.75,
+            maxOutputTokens: options?.maxTokens,
+            ...(options?.jsonMode ? { responseMimeType: 'application/json' } : {})
+          }
+        });
+        const result = await model.generateContent(prompt);
+        return result.response.text();
+      } catch (err: any) {
+        lastError = err;
+        this.logger.warn(`Gemini model ${modelName} gặp lỗi (${err.message}), đang thử model dự phòng...`);
+        /** Nghỉ 1 giây trước khi thử model tiếp theo */
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
    * Generate a simple short caption for YouTube videos
    */
   async ztteam_generateShortCaption(promptText: string): Promise<string> {
@@ -49,12 +86,8 @@ export class ZTTeamAIService {
     }
     try {
       if (settings.activeProvider === 'gemini' && settings.geminiKey) {
-        const { GoogleGenerativeAI } = require('@google/generative-ai');
-        const genAI = new GoogleGenerativeAI(settings.geminiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
-        const result = await model.generateContent(promptText);
-        const response = await result.response;
-        return response.text().trim();
+        const text = await this.ztteam_callGeminiWithFallback(settings.geminiKey, promptText, { temperature: 0.8 });
+        return (text || '').trim();
       } else {
         const OpenAI = require('openai').default;
         const isDeepseek = settings.activeProvider === 'deepseek' && settings.deepseekKey;
@@ -130,18 +163,11 @@ BẮT BUỘC TRẢ VỀ DẠNG KẾT QUẢ ĐÚNG THEO ĐỊNH DẠNG JSON SAU (
 
     try {
       if (settings.activeProvider === 'gemini' && settings.geminiKey) {
-        const genAI = new GoogleGenerativeAI(settings.geminiKey);
-        const model = genAI.getGenerativeModel({
-          model: 'gemini-flash-latest',
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.8,
-            maxOutputTokens: Math.max(2000, Math.round(maxWords * 8)),
-          }
-        });
-
-        const result = await model.generateContent(`${promptWithRules}\n\n${userContent}`);
-        const text = result.response.text();
+        const text = await this.ztteam_callGeminiWithFallback(
+          settings.geminiKey,
+          `${promptWithRules}\n\n${userContent}`,
+          { jsonMode: true, temperature: 0.8, maxTokens: Math.max(2000, Math.round(maxWords * 8)) }
+        );
         const jsonResult = this.ztteam_safeParseJson(text);
         return {
           caption: jsonResult.caption || '',
@@ -285,18 +311,11 @@ BẮT BUỘC TRẢ VỀ DẠNG KẾT QUẢ ĐÚNG THEO ĐỊNH DẠNG JSON SAU (
 
     try {
       if (settings.activeProvider === 'gemini' && settings.geminiKey) {
-        const genAI = new GoogleGenerativeAI(settings.geminiKey);
-        const model = genAI.getGenerativeModel({
-          model: 'gemini-flash-latest',
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.8,
-            maxOutputTokens: 2000,
-          }
-        });
-
-        const result = await model.generateContent(`${promptWithRules}\n\n${userContent}`);
-        const text = result.response.text();
+        const text = await this.ztteam_callGeminiWithFallback(
+          settings.geminiKey,
+          `${promptWithRules}\n\n${userContent}`,
+          { jsonMode: true, temperature: 0.8, maxTokens: 2000 }
+        );
         const jsonResult = this.ztteam_safeParseJson(text);
         return {
           caption: jsonResult.caption || '',
@@ -570,19 +589,11 @@ YOU MUST RETURN EXACTLY ONE JSON OBJECT WITH THE FOLLOWING STRUCTURE:
 
     try {
       if (settings.activeProvider === 'gemini' && settings.geminiKey) {
-        const { GoogleGenerativeAI } = require('@google/generative-ai');
-        const genAI = new GoogleGenerativeAI(settings.geminiKey);
-        const model = genAI.getGenerativeModel({
-          model: 'gemini-flash-latest',
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.8,
-            maxOutputTokens: 500,
-          }
-        });
-
-        const result = await model.generateContent(`${promptWithRules}\n\n${userContent}`);
-        const text = result.response.text();
+        const text = await this.ztteam_callGeminiWithFallback(
+          settings.geminiKey,
+          `${promptWithRules}\n\n${userContent}`,
+          { jsonMode: true, temperature: 0.8, maxTokens: 500 }
+        );
         const jsonResult = JSON.parse(text || '{}');
         return {
           caption: jsonResult.caption || '',
@@ -655,17 +666,11 @@ CRITICAL RULES:
 
     try {
       if (settings.activeProvider === 'gemini' && settings.geminiKey) {
-        const { GoogleGenerativeAI } = require('@google/generative-ai');
-        const genAI = new GoogleGenerativeAI(settings.geminiKey);
-        const model = genAI.getGenerativeModel({
-          model: 'gemini-flash-latest',
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 350,
-          },
-        });
-        const result = await model.generateContent(`${systemPrompt}\n\nORIGINAL STORY:\n"""\n${originalContent}\n"""`);
-        const text = result.response.text();
+        const text = await this.ztteam_callGeminiWithFallback(
+          settings.geminiKey,
+          `${systemPrompt}\n\nORIGINAL STORY:\n"""\n${originalContent}\n"""`,
+          { temperature: 0.7, maxTokens: 350 }
+        );
         return (text || '').trim();
       } else {
         const OpenAI = require('openai').default;
@@ -726,17 +731,11 @@ CRITICAL REQUIREMENTS:
       let rawResponse = '';
 
       if (settings.activeProvider === 'gemini' && settings.geminiKey) {
-        const { GoogleGenerativeAI } = require('@google/generative-ai');
-        const genAI = new GoogleGenerativeAI(settings.geminiKey);
-        const model = genAI.getGenerativeModel({
-          model: 'gemini-flash-latest',
-          generationConfig: {
-            temperature: 0.75,
-            maxOutputTokens: 300,
-          },
-        });
-        const result = await model.generateContent(systemPrompt);
-        rawResponse = result.response.text();
+        rawResponse = await this.ztteam_callGeminiWithFallback(
+          settings.geminiKey,
+          systemPrompt,
+          { temperature: 0.75, maxTokens: 300 }
+        );
       } else {
         const OpenAI = require('openai').default;
         const isDeepseek = settings.activeProvider === 'deepseek' && settings.deepseekKey;
@@ -843,17 +842,11 @@ CRITICAL REQUIREMENTS:
       let rawResponse = '';
 
       if (settings.activeProvider === 'gemini' && settings.geminiKey) {
-        const { GoogleGenerativeAI } = require('@google/generative-ai');
-        const genAI = new GoogleGenerativeAI(settings.geminiKey);
-        const model = genAI.getGenerativeModel({
-          model: 'gemini-flash-latest',
-          generationConfig: {
-            temperature: 0.75,
-            maxOutputTokens: 600,
-          },
-        });
-        const result = await model.generateContent(systemPrompt);
-        rawResponse = result.response.text();
+        rawResponse = await this.ztteam_callGeminiWithFallback(
+          settings.geminiKey,
+          systemPrompt,
+          { temperature: 0.75, maxTokens: 600 }
+        );
       } else {
         const OpenAI = require('openai').default;
         const isDeepseek = settings.activeProvider === 'deepseek' && settings.deepseekKey;

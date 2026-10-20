@@ -194,10 +194,10 @@ JSON SCHEMA:
 
     try {
       if (geminiKey) {
-        this.logger.log('Using Gemini Flash Latest for Story Teaser generation');
+        this.logger.log('Using Gemini 3.5 Flash Lite for Story Teaser generation');
         const genAI = new GoogleGenerativeAI(geminiKey);
         const model = genAI.getGenerativeModel({
-          model: 'gemini-flash-latest',
+          model: 'gemini-3.5-flash-lite',
           generationConfig: {
             responseMimeType: 'application/json',
             temperature: 0.75,
@@ -674,10 +674,10 @@ Return ONLY valid JSON matching this schema:
     let rawJsonText = '';
     try {
       if (geminiKey) {
-        this.logger.log('Using Gemini Flash Latest for Single Image Prompt');
+        this.logger.log('Using Gemini 3.5 Flash Lite for Single Image Prompt');
         const genAI = new GoogleGenerativeAI(geminiKey);
         const model = genAI.getGenerativeModel({
-          model: 'gemini-flash-latest',
+          model: 'gemini-3.5-flash-lite',
           generationConfig: {
             responseMimeType: 'application/json',
             temperature: 0.75,
