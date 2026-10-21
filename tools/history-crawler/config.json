@@ -1,0 +1,18 @@
+{
+  "sourceSite": "https://biz1.translatetooldenglish.com",
+  "startPage": 1,
+  "endPage": 10,
+  "perPage": 100,
+  "delayMs": 1000,
+  "outputJson": "data/history_posts.json",
+  "outputCsv": "data/history_posts.csv",
+  "checkpointFile": "data/checkpoint.json",
+  "wordpress": {
+    "enabled": false,
+    "wpUrl": "https://your-target-wordpress-site.com",
+    "wpUser": "admin",
+    "wpPass": "xxxx xxxx xxxx xxxx",
+    "wpCategory": 1,
+    "wpStatus": "publish"
+  }
+}

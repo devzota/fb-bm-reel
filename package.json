@@ -7,7 +7,8 @@
   ],
   "scripts": {
     "start:api": "npm run start --workspace=apps/api",
-    "start:web": "npm run dev --workspace=apps/web"
+    "start:web": "npm run dev --workspace=apps/web",
+    "tool:history-crawler": "node tools/history-crawler/ztteam_history_crawler.js"
   },
   "devDependencies": {
     "ts-morph": "^28.0.0"

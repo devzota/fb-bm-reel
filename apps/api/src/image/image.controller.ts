@@ -682,12 +682,16 @@ export class ZTTeamImageController {
       const lockedPendingRows = await tx.$queryRawUnsafe<Array<{ id: string }>>(`
         SELECT zi.id 
         FROM ztteam_images zi
-        LEFT JOIN ztteam_facebook_pages zp ON zi.page_id = zp.id
         WHERE zi.status = 'COMPLETED'
           AND zi.is_posted = false
           AND zi.image_url IS NOT NULL
           AND zi.video_status = 'PENDING'
-          AND (zi.page_id IS NULL OR zp.post_format IN ('reel', 'mixed'))
+          AND (
+            zi.page_id IS NULL 
+            OR zi.page_id IN (
+              SELECT zp.id FROM ztteam_pages zp WHERE zp.post_format IN ('reel', 'mixed')
+            )
+          )
         ORDER BY zi.updated_at ASC
         FOR UPDATE SKIP LOCKED
         LIMIT 1
@@ -700,13 +704,17 @@ export class ZTTeamImageController {
         const lockedAutoRows = await tx.$queryRawUnsafe<Array<{ id: string }>>(`
           SELECT zi.id 
           FROM ztteam_images zi
-          LEFT JOIN ztteam_facebook_pages zp ON zi.page_id = zp.id
           WHERE zi.status = 'COMPLETED'
             AND zi.is_posted = false
             AND zi.image_url IS NOT NULL
             AND zi.video_url IS NULL
             AND zi.video_status IN ('NONE', 'FAILED')
-            AND (zi.page_id IS NULL OR zp.post_format IN ('reel', 'mixed'))
+            AND (
+              zi.page_id IS NULL 
+              OR zi.page_id IN (
+                SELECT zp.id FROM ztteam_pages zp WHERE zp.post_format IN ('reel', 'mixed')
+              )
+            )
           ORDER BY zi.created_at DESC
           FOR UPDATE SKIP LOCKED
           LIMIT 1
