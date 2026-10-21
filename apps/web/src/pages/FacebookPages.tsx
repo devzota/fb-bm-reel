@@ -618,9 +618,15 @@ export default function FacebookPages() {
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isSubmittingBulkSource, setIsSubmittingBulkSource] = useState(false);
 
-  /** State Modal Áp Dụng Lịch Đăng Hàng Loạt */
+  /** State Modal Áp Dụng Lịch Đăng & Cấu Hình Video Hàng Loạt */
   const [isBulkScheduleModalOpen, setIsBulkScheduleModalOpen] = useState(false);
   const [isSubmittingBulkSchedule, setIsSubmittingBulkSchedule] = useState(false);
+  const [bulkPostFormat, setBulkPostFormat] = useState<'reel' | 'image' | 'mixed'>('reel');
+  const [bulkVideoEngine, setBulkVideoEngine] = useState<'hook_image' | 'text_story' | 'muse'>('hook_image');
+  const [bulkDefaultBgm, setBulkDefaultBgm] = useState<string>('');
+  const [bulkPostsPerDay, setBulkPostsPerDay] = useState<number>(4);
+  const [bulkAutoPublish, setBulkAutoPublish] = useState<boolean>(true);
+  const [bulkBgmList, setBulkBgmList] = useState<any[]>([]);
 
   const uniqueOwners = Array.from(new Set(pages.map(p => p.ownerName).filter(Boolean)));
   const uniqueBusinesses = Array.from(new Set(pages.map(p => p.businessName).filter(Boolean)));
@@ -728,7 +734,20 @@ export default function FacebookPages() {
     }
   };
 
-  /** Xử lý Áp Dụng Lịch 4 Bài/Ngày (Rải 6 Cụm Lệch 20 Phút) */
+  /** Tải danh sách BGM khi mở Modal cài đặt hàng loạt */
+  useEffect(() => {
+    if (isBulkScheduleModalOpen && bulkBgmList.length === 0) {
+      api.get('media/bgm')
+        .then(res => {
+          if (res.data?.success && Array.isArray(res.data?.data)) {
+            setBulkBgmList(res.data.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isBulkScheduleModalOpen]);
+
+  /** Xử lý Áp Dụng Cài Đặt Kiểu Video & Lịch Đăng Hàng Loạt */
   const handleBulkApplyScheduleSubmit = async () => {
     if (selectedPageIds.length === 0) {
       ztteam_showToast('Vui lòng chọn ít nhất 1 Fanpage', 'error');
@@ -744,14 +763,19 @@ export default function FacebookPages() {
 
       const res = await api.post('/facebook/pages/bulk-apply-schedule', {
         pageIds: resolvedPageIds,
+        postsPerDay: bulkPostsPerDay,
+        postFormat: bulkPostFormat,
+        videoEngine: bulkVideoEngine,
+        defaultBgm: bulkDefaultBgm || undefined,
+        autoPublishEnabled: bulkAutoPublish,
       });
       if (res.data?.success) {
-        ztteam_showToast(res.data.message || 'Áp dụng lịch 4 bài/ngày thành công!', 'success');
+        ztteam_showToast(res.data.message || 'Áp dụng cài đặt hàng loạt thành công!', 'success');
         setIsBulkScheduleModalOpen(false);
         await ztteam_fetchPagesFromDB();
       }
     } catch (err: any) {
-      ztteam_showToast(err.response?.data?.message || err.message || 'Lỗi khi áp dụng lịch', 'error');
+      ztteam_showToast(err.response?.data?.message || err.message || 'Lỗi khi áp dụng cấu hình', 'error');
     } finally {
       setIsSubmittingBulkSchedule(false);
     }
@@ -1320,8 +1344,8 @@ export default function FacebookPages() {
               onClick={() => setIsBulkScheduleModalOpen(true)}
               className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
             >
-              <span className="material-symbols-outlined text-base">schedule</span>
-              <span>Lịch 4 Bài (Lệch 2p)</span>
+              <span className="material-symbols-outlined text-base">tune</span>
+              <span>Cài Đặt Lịch & Kiểu Video</span>
             </button>
 
             <button
@@ -1469,18 +1493,18 @@ export default function FacebookPages() {
         </div>
       )}
 
-      {/** MODAL ÁP DỤNG LỊCH ĐĂNG 4 BÀI/NGÀY (RẢI LỆCH 2 PHÚT TỪNG PAGE) */}
+      {/** MODAL ÁP DỤNG CÀI ĐẶT KIỂU VIDEO & LỊCH ĐĂNG HÀNG LOẠT (RẢI LỆCH 2 PHÚT TỪNG PAGE) */}
       {isBulkScheduleModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-fb-surface w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-5 border border-slate-700/60 flex flex-col max-h-[90vh] overflow-y-auto">
+          <div className="bg-fb-surface w-full max-w-2xl rounded-3xl p-6 shadow-2xl space-y-5 border border-slate-700/60 flex flex-col max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-fb-surface-hover/50">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-md">
-                  <span className="material-symbols-outlined text-xl">schedule</span>
+                  <span className="material-symbols-outlined text-xl">tune</span>
                 </div>
                 <div>
-                  <h3 className="font-black text-lg text-fb-text">Lịch Đăng Chuẩn 4 Bài/Ngày</h3>
-                  <p className="text-xs text-fb-text-muted">Tự động rải lệch 2 phút/page cho <b className="text-emerald-400">{selectedPageIds.length} Fanpage</b> (100% không trùng phút)</p>
+                  <h3 className="font-black text-lg text-fb-text">Cài Đặt Hàng Loạt: Kiểu Video & Lịch Đăng</h3>
+                  <p className="text-xs text-fb-text-muted">Áp dụng cho <b className="text-emerald-400">{selectedPageIds.length} Fanpage</b> đã chọn</p>
                 </div>
               </div>
               <button
@@ -1491,76 +1515,187 @@ export default function FacebookPages() {
               </button>
             </div>
 
-            <div className="space-y-3.5 text-xs">
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-xs space-y-1">
-                <p className="font-bold flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-sm">verified</span>
-                  Thuật toán Rải Lệch Phút Tự Nhiên (2 phút/Page):
-                </p>
-                <p className="text-[11px] text-emerald-200/80">
-                  {selectedPageIds.length} Fanpage sẽ được gán các mốc giờ lệch nhau đúng 2 phút. Không bao giờ có 2 Fanpage nào trùng mốc phút với nhau, giúp mô phỏng hoạt động đăng bài thủ công hoàn hảo và an toàn tuyệt đối trước thuật toán Facebook.
-                </p>
+            <div className="space-y-4 text-xs">
+              {/** PHẦN 1: ĐỊNH DẠNG BÀI ĐĂNG & KIỂU TẠO VIDEO */}
+              <div className="bg-fb-surface-hover/20 p-4 rounded-2xl border border-fb-surface-hover/40 space-y-3.5">
+                <div className="flex items-center gap-2 text-cyan-400 font-bold uppercase tracking-wider text-[11px]">
+                  <span className="material-symbols-outlined text-base">movie_filter</span>
+                  <span>1. Định Dạng Bài Đăng & Kiểu Tạo Video</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-fb-text mb-1.5">
+                      Định Dạng Bài Đăng Chính
+                    </label>
+                    <CustomDropdown
+                      value={bulkPostFormat}
+                      onChange={(val) => setBulkPostFormat(val as any)}
+                      options={[
+                        { value: 'reel', label: 'Đăng Video (Reels Facebook)' },
+                        { value: 'image', label: 'Đăng Ảnh 2K (Bài viết kèm ảnh AI 2K)' },
+                        { value: 'mixed', label: 'Xen kẽ (Luân phiên Ảnh 2K & Reel)' },
+                      ]}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {(bulkPostFormat === 'reel' || bulkPostFormat === 'mixed') && (
+                    <div>
+                      <label className="block text-xs font-bold text-amber-400 mb-1.5">
+                        Công Nghệ Tạo Video Reel
+                      </label>
+                      <CustomDropdown
+                        value={bulkVideoEngine}
+                        onChange={(val) => setBulkVideoEngine(val as any)}
+                        options={[
+                          { value: 'hook_image', label: 'Tạo từ Ảnh Hook & Nhạc (1080x1920 10s - Mặc định)' },
+                          { value: 'text_story', label: 'Text Story Reel (Kính Mờ 9:16, Zoom Ken Burns 10s)' },
+                          { value: 'muse', label: 'Tạo bằng Motion AI (Muse Motion Reel)' },
+                        ]}
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {(bulkPostFormat === 'reel' || bulkPostFormat === 'mixed') && (
+                  <div>
+                    <label className="block text-xs font-bold text-fb-text mb-1.5">
+                      Nhạc Nền Video Reel (BGM)
+                    </label>
+                    <CustomDropdown
+                      value={bulkDefaultBgm}
+                      onChange={(val) => setBulkDefaultBgm(val)}
+                      options={[
+                        { value: '', label: '🎵 Ngẫu nhiên từ Thư Viện Âm Thanh (Khuyên dùng)' },
+                        ...bulkBgmList.map(b => ({
+                          value: b.filename,
+                          label: `🎵 ${b.name} (${b.size_formatted})`
+                        }))
+                      ]}
+                      className="w-full"
+                    />
+                  </div>
+                )}
               </div>
 
-              {/** Bảng xem trước các slot lệch phút */}
-              <div className="border border-slate-700/60 rounded-2xl overflow-hidden">
-                <div className="grid grid-cols-5 p-2.5 bg-slate-800/60 font-bold text-slate-300 text-[11px] border-b border-slate-700/60">
-                  <span>Thứ tự Slot</span>
-                  <span>1. Rạng Sáng</span>
-                  <span>2. Buổi Trưa</span>
-                  <span>3. Buổi Chiều</span>
-                  <span>4. Buổi Tối</span>
+              {/** PHẦN 2: CHỌN SỐ LƯỢNG BÀI ĐĂNG 1 NGÀY */}
+              <div className="bg-fb-surface-hover/20 p-4 rounded-2xl border border-fb-surface-hover/40 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-emerald-400 font-bold uppercase tracking-wider text-[11px]">
+                    <span className="material-symbols-outlined text-base">schedule</span>
+                    <span>2. Chọn Số Lượng Bài Đăng 1 Ngày (Rải Lệch 2 Phút/Page)</span>
+                  </div>
+                  <span className="text-[10px] text-emerald-300 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    Thuật toán chống spam 100%
+                  </span>
                 </div>
-                <div className="divide-y divide-slate-800 text-[11px]">
-                  <div className="grid grid-cols-5 p-2 bg-slate-900/40 items-center">
-                    <span className="font-bold text-blue-400">Page 1 (+0p)</span>
-                    <span className="font-mono text-emerald-400 font-bold">05:00</span>
-                    <span className="font-mono text-slate-300">11:30</span>
-                    <span className="font-mono text-slate-300">16:30</span>
-                    <span className="font-mono text-slate-300">20:00</span>
+
+                {/** Bộ chọn nhanh số bài/ngày */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {[
+                    { count: 2, label: '2 bài / ngày', desc: '11:30, 20:00' },
+                    { count: 3, label: '3 bài / ngày', desc: '08:00, 13:00, 19:30' },
+                    { count: 4, label: '4 bài / ngày', desc: '05:00, 11:30, 16:30, 20:00' },
+                    { count: 5, label: '5 bài / ngày', desc: '05:00, 09:30, 13:30, 17:30, 21:00' },
+                    { count: 6, label: '6 bài / ngày', desc: '05:00, 08:30, 11:30, 14:30...' },
+                  ].map(pkg => (
+                    <button
+                      key={pkg.count}
+                      type="button"
+                      onClick={() => setBulkPostsPerDay(pkg.count)}
+                      className={`p-2.5 rounded-xl border text-center transition-all ${
+                        bulkPostsPerDay === pkg.count
+                          ? 'bg-emerald-500/20 border-emerald-500/60 text-white font-bold shadow-md shadow-emerald-500/10'
+                          : 'bg-slate-800/40 border-slate-700/60 text-fb-text-muted hover:border-slate-500'
+                      }`}
+                    >
+                      <span className={`block text-xs font-black ${bulkPostsPerDay === pkg.count ? 'text-emerald-400' : 'text-slate-200'}`}>
+                        {pkg.label}
+                      </span>
+                      <span className="block text-[10px] text-slate-400 mt-0.5 truncate">
+                        {pkg.desc}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/** Bảng xem trước preview các mốc giờ rải lệch */}
+                <div className="border border-slate-700/60 rounded-2xl overflow-hidden mt-3">
+                  <div className="p-2.5 bg-slate-800/60 font-bold text-slate-300 text-[11px] border-b border-slate-700/60 flex items-center justify-between">
+                    <span>Xem Trước Phân Bổ Giờ Cho {selectedPageIds.length} Page Đang Chọn:</span>
+                    <span className="text-[10px] text-cyan-400 font-mono">Gói {bulkPostsPerDay} bài/ngày (+2p/page)</span>
                   </div>
-                  <div className="grid grid-cols-5 p-2 bg-slate-900/20 items-center">
-                    <span className="font-bold text-blue-400">Page 2 (+2p)</span>
-                    <span className="font-mono text-emerald-400 font-bold">05:02</span>
-                    <span className="font-mono text-slate-300">11:32</span>
-                    <span className="font-mono text-slate-300">16:32</span>
-                    <span className="font-mono text-slate-300">20:02</span>
-                  </div>
-                  <div className="grid grid-cols-5 p-2 bg-slate-900/40 items-center">
-                    <span className="font-bold text-blue-400">Page 3 (+4p)</span>
-                    <span className="font-mono text-emerald-400 font-bold">05:04</span>
-                    <span className="font-mono text-slate-300">11:34</span>
-                    <span className="font-mono text-slate-300">16:34</span>
-                    <span className="font-mono text-slate-300">20:04</span>
-                  </div>
-                  <div className="grid grid-cols-5 p-2 bg-slate-900/20 items-center">
-                    <span className="font-bold text-blue-400">Page 4 (+6p)</span>
-                    <span className="font-mono text-emerald-400 font-bold">05:06</span>
-                    <span className="font-mono text-slate-300">11:36</span>
-                    <span className="font-mono text-slate-300">16:36</span>
-                    <span className="font-mono text-slate-300">20:06</span>
-                  </div>
-                  <div className="grid grid-cols-5 p-2 bg-slate-900/40 items-center">
-                    <span className="font-bold text-blue-400">Page 5 (+8p)</span>
-                    <span className="font-mono text-emerald-400 font-bold">05:08</span>
-                    <span className="font-mono text-slate-300">11:38</span>
-                    <span className="font-mono text-slate-300">16:38</span>
-                    <span className="font-mono text-slate-300">20:08</span>
-                  </div>
-                  <div className="grid grid-cols-5 p-2 bg-slate-900/20 items-center">
-                    <span className="font-bold text-slate-400">Page n (+2p)...</span>
-                    <span className="font-mono text-emerald-400 font-bold">05:xx</span>
-                    <span className="font-mono text-slate-300">11:xx</span>
-                    <span className="font-mono text-slate-300">16:xx</span>
-                    <span className="font-mono text-slate-300">20:xx</span>
+                  <div className="divide-y divide-slate-800/70 text-[11px] max-h-48 overflow-y-auto">
+                    {(() => {
+                      const getTimes = (cnt: number) => {
+                        switch (cnt) {
+                          case 2: return ['11:30', '20:00'];
+                          case 3: return ['08:00', '13:00', '19:30'];
+                          case 5: return ['05:00', '09:30', '13:30', '17:30', '21:00'];
+                          case 6: return ['05:00', '08:30', '11:30', '14:30', '17:30', '20:30'];
+                          case 4:
+                          default: return ['05:00', '11:30', '16:30', '20:00'];
+                        }
+                      };
+                      const base = getTimes(bulkPostsPerDay);
+                      const addMins = (t: string, m: number) => {
+                        const [hh, mm] = t.split(':').map(Number);
+                        const tot = hh * 60 + mm + m;
+                        const nH = Math.floor(tot / 60) % 24;
+                        const nM = tot % 60;
+                        return `${String(nH).padStart(2, '0')}:${String(nM).padStart(2, '0')}`;
+                      };
+
+                      return selectedPageIds.slice(0, 6).map((selId, idx) => {
+                        const pageObj = pages.find(p => p.id === selId || (p as any).internalId === selId);
+                        const pName = pageObj?.name || `Page ${idx + 1}`;
+                        const offset = idx * 2;
+                        const stagTimes = base.map(t => addMins(t, offset));
+
+                        return (
+                          <div key={selId} className="p-2 bg-slate-900/40 flex items-center justify-between gap-2">
+                            <span className="font-bold text-blue-400 truncate max-w-[160px]">
+                              {pName} <span className="text-slate-500 font-mono text-[10px]">(+{offset}p)</span>
+                            </span>
+                            <div className="flex items-center gap-1.5 font-mono text-[11px] flex-wrap justify-end">
+                              {stagTimes.map((tm, tIdx) => (
+                                <span key={tIdx} className="px-1.5 py-0.5 rounded bg-slate-800 text-emerald-400 font-bold border border-emerald-500/20">
+                                  {tm}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                    {selectedPageIds.length > 6 && (
+                      <div className="p-2 bg-slate-900/20 text-center text-slate-400 text-[10px] italic">
+                        ...và {selectedPageIds.length - 6} Fanpage còn lại tiếp tục được cộng dồn lệch +2 phút mỗi page.
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-800/40 rounded-xl space-y-1 text-[11px] text-slate-400">
-                <p>• Tự động kích hoạt cờ <b>Tự động đăng bài (Auto Publish: ON)</b> cho toàn bộ Page.</p>
-                <p>• Đặt chế độ <b>Khung Giờ Cố Định (Fixed Schedule)</b> với 4 bài/ngày.</p>
-                <p>• Khoảng cách bài đăng của mỗi Page luôn đảm bảo cách nhau từ <b>3.5 đến 5.5 tiếng</b>.</p>
+              {/** PHẦN 3: TÙY CHỌN TỰ ĐỘNG ĐĂNG BÀI */}
+              <div className="bg-fb-surface-hover/20 p-3.5 rounded-2xl border border-fb-surface-hover/40 flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-fb-text block">Tự Động Xuất Bản (Auto Publish)</span>
+                  <span className="text-[11px] text-fb-text-muted">
+                    {bulkAutoPublish ? 'Bật: Bài viết hoàn thành sẽ tự động đăng lên Page theo đúng lịch giờ ở trên' : 'Tắt: Bài viết sẽ chờ trong hàng đợi để duyệt thủ công'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBulkAutoPublish(!bulkAutoPublish)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    bulkAutoPublish ? 'bg-emerald-500' : 'bg-black/30 shadow-inner border border-white/5'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${bulkAutoPublish ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
               </div>
             </div>
 
@@ -1575,7 +1710,7 @@ export default function FacebookPages() {
               <button
                 onClick={handleBulkApplyScheduleSubmit}
                 disabled={isSubmittingBulkSchedule}
-                className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50"
+                className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isSubmittingBulkSchedule ? (
                   <span className="material-symbols-outlined animate-spin text-sm">sync</span>

@@ -979,10 +979,30 @@ export class ZTTeamFacebookService {
   }
 
   /**
-   * ZTTeam: Áp dụng Lịch Đăng Chuẩn 4 Bài/Ngày (Rải 6 Cụm lệch 20 phút có Khung Rạng Sáng)
+   * ZTTeam: Áp dụng Lịch Đăng & Kiểu Tạo Video Hàng Loạt (Rải lệch 2 phút từng Page)
    */
-  async ztteam_bulkApplySchedule(userId: string, data: { pageIds: string[] }) {
-    const { pageIds } = data;
+  async ztteam_bulkApplySchedule(
+    userId: string,
+    data: {
+      pageIds: string[];
+      postsPerDay?: number;
+      customTimes?: string[];
+      postFormat?: 'image' | 'reel' | 'mixed';
+      videoEngine?: 'hook_image' | 'text_story' | 'muse';
+      defaultBgm?: string;
+      autoPublishEnabled?: boolean;
+    }
+  ) {
+    const {
+      pageIds,
+      postsPerDay = 4,
+      customTimes,
+      postFormat,
+      videoEngine,
+      defaultBgm,
+      autoPublishEnabled
+    } = data;
+
     if (!pageIds || pageIds.length === 0) {
       throw new BadRequestException('Vui lòng chọn ít nhất 1 Fanpage');
     }
@@ -1002,8 +1022,30 @@ export class ZTTeamFacebookService {
       throw new BadRequestException('Không tìm thấy Fanpage hợp lệ');
     }
 
-    /** 4 Khung giờ vàng chuẩn (Khung Rạng Sáng 05:00, Trưa 11:30, Chiều 16:30, Tối 20:00) */
-    const BASE_GOLDEN_TIMES = ['05:00', '11:30', '16:30', '20:00'];
+    /** Xác định danh sách khung giờ vàng gốc theo số lượng bài/ngày */
+    let BASE_GOLDEN_TIMES: string[] = [];
+    if (customTimes && Array.isArray(customTimes) && customTimes.length > 0) {
+      BASE_GOLDEN_TIMES = customTimes;
+    } else {
+      switch (Number(postsPerDay)) {
+        case 2:
+          BASE_GOLDEN_TIMES = ['11:30', '20:00'];
+          break;
+        case 3:
+          BASE_GOLDEN_TIMES = ['08:00', '13:00', '19:30'];
+          break;
+        case 5:
+          BASE_GOLDEN_TIMES = ['05:00', '09:30', '13:30', '17:30', '21:00'];
+          break;
+        case 6:
+          BASE_GOLDEN_TIMES = ['05:00', '08:30', '11:30', '14:30', '17:30', '20:30'];
+          break;
+        case 4:
+        default:
+          BASE_GOLDEN_TIMES = ['05:00', '11:30', '16:30', '20:00'];
+          break;
+      }
+    }
 
     /** Hàm cộng dồn số phút vào mốc giờ chuẩn */
     const addMinutesToTime = (baseTime: string, addMins: number): string => {
@@ -1021,13 +1063,25 @@ export class ZTTeamFacebookService {
       const offsetMinutes = i * 2;
       const staggeredTimes = BASE_GOLDEN_TIMES.map(t => addMinutesToTime(t, offsetMinutes));
 
+      const updateData: any = {
+        schedule_mode: 'fixed',
+        schedule_fixed_times: staggeredTimes,
+        auto_publish_enabled: autoPublishEnabled !== undefined ? autoPublishEnabled : true
+      };
+
+      if (postFormat) {
+        updateData.post_format = postFormat;
+      }
+      if (videoEngine) {
+        updateData.video_engine = videoEngine;
+      }
+      if (defaultBgm !== undefined) {
+        updateData.default_bgm = defaultBgm || null;
+      }
+
       await this.prisma.ztteam_pages.update({
         where: { id: page.id },
-        data: {
-          schedule_mode: 'fixed',
-          schedule_fixed_times: staggeredTimes,
-          auto_publish_enabled: true
-        }
+        data: updateData
       });
 
       results.push({
@@ -1035,14 +1089,16 @@ export class ZTTeamFacebookService {
         pageName: page.name,
         slotIndex: i + 1,
         offsetMinutes,
-        times: staggeredTimes
+        times: staggeredTimes,
+        postFormat: updateData.post_format || page.post_format,
+        videoEngine: updateData.video_engine || page.video_engine
       });
     }
 
     return {
       success: true,
       count: pages.length,
-      message: `Đã áp dụng Lịch Đăng 4 Bài/Ngày rải lệch 2 phút cá nhân hóa cho ${pages.length} Fanpage thành công! (100% không trùng phút)`,
+      message: `Đã áp dụng cài đặt ${BASE_GOLDEN_TIMES.length} bài/ngày (lệch 2 phút/page) và cấu hình video thành công cho ${pages.length} Fanpage!`,
       details: results
     };
   }

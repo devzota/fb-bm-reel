@@ -48,7 +48,16 @@ export class ZTTeamFacebookController {
 
   @Post('pages/bulk-apply-schedule')
   ztteam_bulkApplySchedule(
-    @Body() body: { pageIds: string[] },
+    @Body()
+    body: {
+      pageIds: string[];
+      postsPerDay?: number;
+      customTimes?: string[];
+      postFormat?: 'image' | 'reel' | 'mixed';
+      videoEngine?: 'hook_image' | 'text_story' | 'muse';
+      defaultBgm?: string;
+      autoPublishEnabled?: boolean;
+    },
     @Request() req: any
   ) {
     return this.facebookService.ztteam_bulkApplySchedule(req.user.sub, body);
