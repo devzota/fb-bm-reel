@@ -40,6 +40,7 @@ export class ZTTeamCrawlerService {
     sourceCategory?: string;
     existingImageUrl?: string;
     forceRecreate?: boolean;
+    keepContentImages?: boolean;
   }): Promise<{
     success: boolean;
     title: string;
@@ -51,7 +52,7 @@ export class ZTTeamCrawlerService {
     pageId?: string;
     imageId?: string;
   }> {
-    const { sourceUrl, targetSiteId, pageId, addLinkToComment = true, sourceCategory, existingImageUrl, forceRecreate = false } = params;
+    const { sourceUrl, targetSiteId, pageId, addLinkToComment = true, sourceCategory, existingImageUrl, forceRecreate = false, keepContentImages = false } = params;
 
     this.logger.log(`Starting Crawl -> 2K AI Image -> WordPress -> Fanpage pipeline for: ${sourceUrl}`);
 
@@ -147,9 +148,13 @@ export class ZTTeamCrawlerService {
     }
 
     /** 3. Post to WordPress Target Site with 2K image as Featured Media */
+    const contentForWp = (keepContentImages && storyData.cleanHtmlWithImages)
+      ? storyData.cleanHtmlWithImages
+      : cleanContent;
+
     const wpResult = await this.wordpressService.ztteam_createPost(targetSiteId, {
       title: storyTitle,
-      content: cleanContent,
+      content: contentForWp,
       excerpt: cleanContent.substring(0, 200) + '...',
       categories: sourceCategory ? [Number(sourceCategory)] : undefined,
       imageUrl: image2kUrl,
@@ -506,11 +511,12 @@ export class ZTTeamCrawlerService {
     };
   }
 
-  async ztteam_createSource(siteId: string, data: { sourceUrl: string; sourceCategory: string; frequencyCron: string; addLinkToComment?: boolean; batchSize?: number }) {
+  async ztteam_createSource(siteId: string, data: { sourceUrl: string; sourceCategory: string; frequencyCron: string; addLinkToComment?: boolean; batchSize?: number; keepContentImages?: boolean }) {
     try {
       const extractRules = {
         addLinkToComment: data.addLinkToComment !== undefined ? data.addLinkToComment : true,
         batchSize: data.batchSize ? Math.max(1, Math.min(10, Number(data.batchSize))) : 1,
+        keepContentImages: Boolean(data.keepContentImages),
       };
       return await this.prisma.ztteam_crawl_sources.create({
         data: {
@@ -528,7 +534,7 @@ export class ZTTeamCrawlerService {
     }
   }
 
-  async ztteam_updateSource(sourceId: string, data: { sourceUrl: string; sourceCategory: string; frequencyCron: string; addLinkToComment?: boolean; batchSize?: number }) {
+  async ztteam_updateSource(sourceId: string, data: { sourceUrl: string; sourceCategory: string; frequencyCron: string; addLinkToComment?: boolean; batchSize?: number; keepContentImages?: boolean }) {
     const existing = await this.prisma.ztteam_crawl_sources.findUnique({ where: { id: sourceId } });
     let extractRules: any = {};
     try {
@@ -543,6 +549,9 @@ export class ZTTeamCrawlerService {
     }
     if (data.batchSize !== undefined) {
       extractRules.batchSize = Math.max(1, Math.min(10, Number(data.batchSize)));
+    }
+    if (data.keepContentImages !== undefined) {
+      extractRules.keepContentImages = Boolean(data.keepContentImages);
     }
 
     return this.prisma.ztteam_crawl_sources.update({

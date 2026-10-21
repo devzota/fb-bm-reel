@@ -35,6 +35,10 @@ export default function SystemSettingsPage() {
   const [currentPlayingBgm, setCurrentPlayingBgm] = useState<string | null>(null);
   const [bgmAudio, setBgmAudio] = useState<HTMLAudioElement | null>(null);
 
+  /** AI Live Health State */
+  const [aiHealth, setAiHealth] = useState<any>(null);
+  const [isCheckingAiHealth, setIsCheckingAiHealth] = useState(false);
+
   useEffect(() => {
     const fetchSettings = async () => {
       try {
@@ -49,11 +53,25 @@ export default function SystemSettingsPage() {
     fetchSettings();
     ztteam_fetchPagesFromDB();
     ztteam_fetchBgmList();
+    ztteam_checkAiHealth();
 
     return () => {
       if (bgmAudio) bgmAudio.pause();
     };
   }, []);
+
+  /** ZTTeam: Kiểm tra trực tiếp thông số và hạn ngạch AI */
+  const ztteam_checkAiHealth = async () => {
+    try {
+      setIsCheckingAiHealth(true);
+      const res = await api.get('settings/ai-health');
+      setAiHealth(res.data);
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setIsCheckingAiHealth(false);
+    }
+  };
 
   const ztteam_fetchBgmList = async () => {
     try {
@@ -247,15 +265,104 @@ export default function SystemSettingsPage() {
 
           {/* Section 2: AI Engine API Key Settings */}
           <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-cyan-950/30 p-5 rounded-2xl shadow-lg space-y-4">
-            <div>
-              <h3 className="text-base font-bold text-fb-text flex items-center gap-2">
-                <div className="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-cyan-500/15 text-cyan-400">
-                  <span className="material-symbols-outlined text-xl">key</span>
-                </div>
-                <span>Cấu Hình Khóa AI Engine API</span>
-              </h3>
-              <p className="text-xs font-medium text-fb-text-muted mt-0.5">Dùng để tự động tạo kịch bản, giọng đọc Voiceover và render Reels.</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-fb-text flex items-center gap-2">
+                  <div className="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-cyan-500/15 text-cyan-400">
+                    <span className="material-symbols-outlined text-xl">key</span>
+                  </div>
+                  <span>Cấu Hình Khóa AI Engine API</span>
+                </h3>
+                <p className="text-xs font-medium text-fb-text-muted mt-0.5">Dùng để tự động tạo kịch bản, giọng đọc Voiceover và render Reels.</p>
+              </div>
+              <button 
+                type="button" 
+                onClick={ztteam_checkAiHealth}
+                disabled={isCheckingAiHealth}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500 hover:text-white transition-all disabled:opacity-50"
+                title="Kiểm tra thông số kết nối & hạn ngạch thực tế"
+              >
+                <span className={`material-symbols-outlined text-base ${isCheckingAiHealth ? 'animate-spin' : ''}`}>sync</span>
+                <span>{isCheckingAiHealth ? 'Đang test...' : 'Kiểm tra API'}</span>
+              </button>
             </div>
+
+            {/** Bảng giám sát thông số & hạn ngạch AI thời gian thực */}
+            {aiHealth && (
+              <div className="bg-fb-surface-hover/60 border border-white/5 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-fb-text uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-sm text-cyan-400">monitoring</span>
+                    Thông số & Hạn Ngạch AI Thời Gian Thực
+                  </span>
+                  <span className="text-[10px] text-fb-text-muted font-medium">Provider ưu tiên: <strong className="text-cyan-400 uppercase">{aiHealth.activeProvider}</strong></span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {/** Card Google Gemini */}
+                  <div className="p-3 rounded-xl bg-black/20 border border-white/5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-amber-400 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">bolt</span>
+                        Google Gemini
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                        aiHealth.gemini?.status === 'HEALTHY' 
+                          ? 'bg-emerald-500/15 text-emerald-400' 
+                          : (aiHealth.gemini?.status === 'QUOTA_EXCEEDED' ? 'bg-amber-500/15 text-amber-400' : 'bg-red-500/15 text-red-400')
+                      }`}>
+                        {aiHealth.gemini?.status === 'HEALTHY' ? 'ONLINE' : (aiHealth.gemini?.status === 'QUOTA_EXCEEDED' ? 'HẾT QUOTA (429)' : 'LỖI')}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-fb-text-muted space-y-0.5">
+                      <p>Model: <strong className="text-fb-text">{aiHealth.gemini?.model}</strong></p>
+                      <p>Hạn ngạch: <strong className="text-amber-400">{aiHealth.gemini?.quotaTier}</strong></p>
+                      {aiHealth.gemini?.latencyMs > 0 && <p>Độ trễ: <strong className="text-emerald-400">{aiHealth.gemini?.latencyMs} ms</strong></p>}
+                      <p className="text-[10px] text-fb-text-muted/80 truncate mt-1" title={aiHealth.gemini?.message}>{aiHealth.gemini?.message}</p>
+                    </div>
+                  </div>
+
+                  {/** Card OpenAI */}
+                  <div className="p-3 rounded-xl bg-black/20 border border-white/5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-cyan-400 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">smart_toy</span>
+                        OpenAI (Dự phòng)
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                        aiHealth.openai?.status === 'HEALTHY' 
+                          ? 'bg-emerald-500/15 text-emerald-400' 
+                          : (aiHealth.openai?.status === 'NOT_CONFIGURED' ? 'bg-white/10 text-fb-text-muted' : 'bg-red-500/15 text-red-400')
+                      }`}>
+                        {aiHealth.openai?.status === 'HEALTHY' ? 'SẴN SÀNG' : (aiHealth.openai?.status === 'NOT_CONFIGURED' ? 'CHƯA CÓ KEY' : 'LỖI')}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-fb-text-muted space-y-0.5">
+                      <p>Model: <strong className="text-fb-text">{aiHealth.openai?.model}</strong></p>
+                      <p>Vai trò: <strong className="text-cyan-400">Tự động thay thế khi Gemini hết hạn</strong></p>
+                      {aiHealth.openai?.latencyMs > 0 && <p>Độ trễ: <strong className="text-emerald-400">{aiHealth.openai?.latencyMs} ms</strong></p>}
+                      <p className="text-[10px] text-fb-text-muted/80 truncate mt-1" title={aiHealth.openai?.message}>{aiHealth.openai?.message}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/** Card SangTao.ai */}
+                <div className="p-2.5 rounded-xl bg-black/20 border border-white/5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-base text-emerald-400">palette</span>
+                    <div>
+                      <span className="font-bold text-fb-text block">SangTao.ai (Ảnh 2K)</span>
+                      <span className="text-[10px] text-fb-text-muted">{aiHealth.sangtao?.message}</span>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
+                    aiHealth.sangtao?.status === 'HEALTHY' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'
+                  }`}>
+                    {aiHealth.sangtao?.status === 'HEALTHY' ? 'CÒN CREDIT' : 'DÙNG ẢNH GỐC'}
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               <div>

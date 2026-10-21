@@ -50,6 +50,7 @@ export default function WordPressSites() {
   const [sourceCategory, setSourceCategory] = useState('');
   const [frequencyCron, setFrequencyCron] = useState('0 */6 * * *');
   const [batchSize, setBatchSize] = useState<number>(1);
+  const [keepContentImages, setKeepContentImages] = useState(false);
 
   /** Fanpages state */
   const [pages, setPages] = useState<any[]>([]);
@@ -68,6 +69,7 @@ export default function WordPressSites() {
   const [autoPageId, setAutoPageId] = useState('');
   const [autoCategory, setAutoCategory] = useState('');
   const [autoAddComment, setAutoAddComment] = useState(true);
+  const [autoKeepContentImages, setAutoKeepContentImages] = useState(false);
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [autoStepText, setAutoStepText] = useState('');
   const [autoResult, setAutoResult] = useState<any>(null);
@@ -207,6 +209,7 @@ export default function WordPressSites() {
     setSourceCategory('');
     setFrequencyCron('0 */6 * * *');
     setBatchSize(1);
+    setKeepContentImages(false);
   };
 
   const ztteam_handleEditSource = (source: CrawlSource) => {
@@ -218,8 +221,10 @@ export default function WordPressSites() {
     try {
       const rules = JSON.parse(source.extract_rules_json || '{}');
       setBatchSize(rules.batchSize ? Number(rules.batchSize) : 1);
+      setKeepContentImages(Boolean(rules.keepContentImages));
     } catch (e) {
       setBatchSize(1);
+      setKeepContentImages(false);
     }
   };
 
@@ -227,14 +232,14 @@ export default function WordPressSites() {
     e.preventDefault();
     try {
       if (editingSourceId) {
-        await ztteam_updateSource(editingSourceId, { sourceUrl, sourceCategory, frequencyCron, batchSize });
+        await ztteam_updateSource(editingSourceId, { sourceUrl, sourceCategory, frequencyCron, batchSize, keepContentImages });
         ztteam_showToast('Cập nhật website nguồn thành công', 'success');
       } else {
         const urls = sourceUrl.split('\n').map(u => u.trim()).filter(u => u);
         let successCount = 0;
         for (const url of urls) {
           try {
-            await ztteam_createSource(siteId, { sourceUrl: url, sourceCategory, frequencyCron, batchSize });
+            await ztteam_createSource(siteId, { sourceUrl: url, sourceCategory, frequencyCron, batchSize, keepContentImages });
             successCount++;
           } catch (e) {
             console.error(`Failed to add source ${url}`, e);
@@ -257,6 +262,7 @@ export default function WordPressSites() {
     setAutoPageId('');
     setAutoCategory('');
     setAutoAddComment(true);
+    setAutoKeepContentImages(false);
     setAutoResult(null);
     setAutoError('');
     setAutoStepText('');
@@ -297,6 +303,7 @@ export default function WordPressSites() {
         pageId: autoPageId || undefined,
         addLinkToComment: autoAddComment,
         sourceCategory: autoCategory || undefined,
+        keepContentImages: autoKeepContentImages,
       });
 
       clearTimeout(timer1);
@@ -690,6 +697,24 @@ export default function WordPressSites() {
                                   required
                                 />
                                 <p className="mt-1.5 text-[11px] text-fb-text-muted">Khuyên dùng 1 bài để tiết kiệm API AI và tránh quá tải.</p>
+                              </div>
+
+                              <div className="md:col-span-2">
+                                <label className="flex items-center justify-between p-3.5 bg-fb-surface rounded-2xl cursor-pointer border border-white/5">
+                                  <div>
+                                    <span className="text-xs font-bold text-fb-text block">Lấy ảnh trong nội dung bài viết</span>
+                                    <span className="text-[11px] text-fb-text-muted block mt-0.5">Tải toàn bộ hình ảnh trong thân bài về hosting WordPress của bạn và giữ nguyên vị trí trong bài.</span>
+                                  </div>
+                                  <div className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={keepContentImages}
+                                      onChange={(e) => setKeepContentImages(e.target.checked)}
+                                      className="sr-only peer"
+                                    />
+                                    <div className="w-9 h-5 bg-fb-surface-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                  </div>
+                                </label>
                               </div>
                             </div>
 
@@ -1170,6 +1195,27 @@ export default function WordPressSites() {
                         type="checkbox"
                         checked={autoAddComment}
                         onChange={(e) => setAutoAddComment(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-fb-surface-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Option: Keep content images toggle */}
+                  <div className="flex items-center justify-between p-3.5 bg-fb-surface-hover/40 rounded-2xl border border-white/5">
+                    <div>
+                      <span className="text-xs font-bold text-fb-text block">
+                        Lấy ảnh trong nội dung bài viết
+                      </span>
+                      <span className="text-[11px] text-fb-text-muted">
+                        Tải toàn bộ hình ảnh trong thân bài về hosting WordPress của bạn và giữ nguyên vị trí trong bài
+                      </span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={autoKeepContentImages}
+                        onChange={(e) => setAutoKeepContentImages(e.target.checked)}
                         className="sr-only peer"
                       />
                       <div className="w-9 h-5 bg-fb-surface-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>

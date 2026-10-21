@@ -41,4 +41,114 @@ export class ZTTeamSettingsService {
 
     return { success: true };
   }
+
+  /**
+   * ZTTeam: Kiểm tra trực tiếp thông số, độ trễ và hạn ngạch của các Provider AI
+   */
+  async ztteam_getAiHealth() {
+    const settings = await this.ztteam_getSettings();
+    const result: any = {
+      activeProvider: settings['active_ai_provider'] || 'gemini',
+      gemini: { status: 'NOT_CONFIGURED', latencyMs: 0, model: 'gemini-3.5-flash-lite', quotaTier: 'Free Tier (500 req/ngày)', message: 'Chưa cấu hình API Key' },
+      openai: { status: 'NOT_CONFIGURED', latencyMs: 0, model: 'gpt-4o-mini', message: 'Chưa cấu hình API Key' },
+      sangtao: { status: 'NOT_CONFIGURED', availableCredits: 0, message: 'Chưa cấu hình API Key' }
+    };
+
+    /** 1. Kiểm tra Google Gemini */
+    const geminiKey = settings['gemini_api_key'] || process.env.GEMINI_API_KEY;
+    if (geminiKey) {
+      try {
+        const { GoogleGenerativeAI } = require('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(geminiKey);
+        const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
+        const t0 = Date.now();
+        const res = await model.generateContent('ping');
+        const latencyMs = Date.now() - t0;
+        result.gemini = {
+          status: 'HEALTHY',
+          latencyMs,
+          model: 'gemini-3.5-flash-lite',
+          quotaTier: 'Free Tier (500 req/ngày)',
+          message: 'Kết nối ổn định, sẵn sàng xử lý'
+        };
+      } catch (err: any) {
+        const msg = err.message || '';
+        const is429 = msg.includes('429') || msg.includes('Quota exceeded') || msg.includes('RESOURCE_EXHAUSTED');
+        result.gemini = {
+          status: is429 ? 'QUOTA_EXCEEDED' : 'ERROR',
+          latencyMs: 0,
+          model: 'gemini-3.5-flash-lite',
+          quotaTier: 'Free Tier (500 req/ngày)',
+          message: is429 ? 'Đã chạm hạn ngạch 500 req/ngày của Google Free Tier. Đang chờ reset hoặc tự động chuyển sang OpenAI.' : msg
+        };
+      }
+    }
+
+    /** 2. Kiểm tra OpenAI */
+    const openaiKey = settings['openai_api_key'] || process.env.OPENAI_API_KEY;
+    if (openaiKey) {
+      try {
+        const OpenAI = require('openai').default;
+        const openai = new OpenAI({ apiKey: openaiKey });
+        const t0 = Date.now();
+        const res = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: 'hi' }],
+          max_tokens: 5,
+        });
+        const latencyMs = Date.now() - t0;
+        result.openai = {
+          status: 'HEALTHY',
+          latencyMs,
+          model: 'gpt-4o-mini',
+          message: 'Kết nối ổn định, sẵn sàng dự phòng'
+        };
+      } catch (err: any) {
+        result.openai = {
+          status: 'ERROR',
+          latencyMs: 0,
+          model: 'gpt-4o-mini',
+          message: err.message || 'Lỗi kết nối OpenAI'
+        };
+      }
+    }
+
+    /** 3. Kiểm tra SangTao.ai */
+    const sangtaoKey = settings['siliconflow_api_key'] || process.env.SANGTAO_API_KEY;
+    const cleanKey = (sangtaoKey || '').replace(/^["']|["']$/g, '').trim();
+    if (cleanKey) {
+      try {
+        const res = await fetch('https://sangtao.ai/api/v2/agents/jobs/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Api-Key': cleanKey,
+          },
+          body: JSON.stringify({ ping: true }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.error && data.error.includes('Insufficient credits')) {
+          result.sangtao = {
+            status: 'OUT_OF_CREDITS',
+            availableCredits: 0,
+            message: 'Hết credit (Available: 0). Đang tự động kích hoạt lấy ảnh gốc bài viết làm ảnh đại diện.'
+          };
+        } else {
+          result.sangtao = {
+            status: 'HEALTHY',
+            availableCredits: data.availableCredits || 'OK',
+            message: 'Sẵn sàng tạo ảnh 2K'
+          };
+        }
+      } catch (err: any) {
+        result.sangtao = {
+          status: 'ERROR',
+          availableCredits: 0,
+          message: err.message
+        };
+      }
+    }
+
+    return result;
+  }
 }

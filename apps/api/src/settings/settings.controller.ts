@@ -15,6 +15,11 @@ export class ZTTeamSettingsController {
     return this.settingsService.ztteam_getSettings();
   }
 
+  @Get('ai-health')
+  async ztteam_getAiHealth() {
+    return this.settingsService.ztteam_getAiHealth();
+  }
+
   @Put()
   async ztteam_updateSettings(@Request() req: any, @Body() data: any) {
     if (req.user.role !== 'ADMIN') {

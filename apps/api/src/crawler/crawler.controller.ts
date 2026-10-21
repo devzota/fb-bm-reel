@@ -25,6 +25,7 @@ export class ZTTeamCrawlerController {
       pageId?: string;
       addLinkToComment?: boolean;
       sourceCategory?: string;
+      keepContentImages?: boolean;
     }
   ) {
     return this.crawlerService.ztteam_crawlAndPublishStory(body);
@@ -33,7 +34,7 @@ export class ZTTeamCrawlerController {
   @Post('sites/:siteId/sources')
   ztteam_createSource(
     @Param('siteId') siteId: string,
-    @Body() body: { sourceUrl: string; sourceCategory: string; frequencyCron: string; addLinkToComment?: boolean; batchSize?: number }
+    @Body() body: { sourceUrl: string; sourceCategory: string; frequencyCron: string; addLinkToComment?: boolean; batchSize?: number; keepContentImages?: boolean }
   ) {
     return this.crawlerService.ztteam_createSource(siteId, body);
   }
@@ -46,7 +47,7 @@ export class ZTTeamCrawlerController {
   @Patch('sources/:sourceId/edit')
   ztteam_updateSource(
     @Param('sourceId') sourceId: string,
-    @Body() body: { sourceUrl: string; sourceCategory: string; frequencyCron: string; addLinkToComment?: boolean; batchSize?: number }
+    @Body() body: { sourceUrl: string; sourceCategory: string; frequencyCron: string; addLinkToComment?: boolean; batchSize?: number; keepContentImages?: boolean }
   ) {
     return this.crawlerService.ztteam_updateSource(sourceId, body);
   }

@@ -12,6 +12,7 @@ export interface ZTTeamFetchResult {
   images?: string[];
   content: string;
   contentHtml: string;
+  cleanHtmlWithImages?: string;
   excerpt: string;
   siteName: string | null;
   url: string;
@@ -393,16 +394,55 @@ export class ZTTeamFetcherService {
       throw new HttpException(`Không phải bài viết hợp lệ (${validation.reason})`, HttpStatus.BAD_REQUEST);
     }
 
+    /** ZTTeam: Chuẩn hóa HTML có chứa ảnh cho website đích */
+    let cleanHtmlWithImages = cleanContent.split(/\n\s*\n/).map(p => `<p>${p.trim()}</p>`).join('\n');
+    if (images.length > 0) {
+      const imgTags = images.map(img => `<p><img src="${img}" alt="" /></p>`).join('\n');
+      cleanHtmlWithImages = `${cleanHtmlWithImages}\n${imgTags}`;
+    }
+
     return {
       title: finalTitle,
       image: featuredImage || images[0] || null,
       images: [...new Set(images)],
       content: cleanContent,
       contentHtml: cleanContent,
+      cleanHtmlWithImages,
       excerpt: cleanContent.substring(0, 200),
       siteName: this.ztteam_extractDomain(url),
       url,
     };
+  }
+
+  /**
+   * ZTTeam: Làm sạch HTML bài viết nhưng giữ lại cấu trúc đoạn văn (<p>) và hình ảnh (<img>, <figure>)
+   */
+  ztteam_cleanHtmlKeepImages(rawHtml: string, baseUrl: string): string {
+    if (!rawHtml) return '';
+    try {
+      const $ = cheerio.load(rawHtml);
+      $('script, style, noscript, iframe, form, button, nav, header, footer, .sharedaddy, .ads, [data-widget-id], .author-box, .social-share, time, .breadcrumbs').remove();
+
+      $('img').each((_, el) => {
+        let src = $(el).attr('src') || $(el).attr('data-src');
+        const rawSrcset = $(el).attr('srcset');
+        if (!src && rawSrcset) {
+          const srcset = rawSrcset.split(',')[0].trim().split(' ')[0];
+          src = srcset;
+        }
+        if (src) {
+          try {
+            src = new URL(src, baseUrl).href;
+            $(el).attr('src', src);
+          } catch (e) {}
+        }
+        $(el).removeAttr('srcset').removeAttr('sizes').removeAttr('loading').removeAttr('data-src');
+      });
+
+      return $('body').html() || $.html();
+    } catch {
+      return rawHtml;
+    }
   }
 
   /**
@@ -616,12 +656,21 @@ export class ZTTeamFetcherService {
         throw new HttpException(`Không phải bài viết hợp lệ (${validation.reason})`, HttpStatus.BAD_REQUEST);
       }
 
+      /** ZTTeam: Chuẩn hóa HTML giữ lại ảnh bài viết cho website đích */
+      let cleanHtmlWithImages = '';
+      if (contentHtml) {
+        cleanHtmlWithImages = this.ztteam_cleanHtmlKeepImages(contentHtml, url);
+      } else {
+        cleanHtmlWithImages = this.ztteam_cleanHtmlKeepImages(html, url);
+      }
+
       return {
         title,
         image,
         images: [...new Set(images)],
         content,
         contentHtml,
+        cleanHtmlWithImages,
         excerpt,
         siteName: siteName || this.ztteam_extractDomain(url),
         url,
