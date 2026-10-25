@@ -84,6 +84,9 @@ export class ZTTeamRenderCron implements OnApplicationBootstrap {
             { page_id: null },
             {
               page: {
+                is_active: true,
+                auto_publish_enabled: true,
+                token_status: 'active',
                 video_engine: { in: ['hook_image', 'text_story'] },
               },
             },

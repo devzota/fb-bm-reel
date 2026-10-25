@@ -302,6 +302,22 @@ export class ZTTeamHookVideoService {
       return { success: true, videoUrl: imageRecord.video_url || undefined, message: 'Bài viết đã đăng lên Facebook, cấm render lại.' };
     }
 
+    /** ZTTeam: Page đã tắt hoặc bị chặn thì tuyệt đối không render video */
+    if (imageRecord.page) {
+      const isPageInactive = imageRecord.page.is_active === false;
+      const isAutoPublishDisabled = imageRecord.page.auto_publish_enabled === false;
+      const isTokenBlocked = imageRecord.page.token_status && imageRecord.page.token_status !== 'active';
+
+      if (isPageInactive || isAutoPublishDisabled || isTokenBlocked) {
+        this.logger.warn(`[HOOK RENDER BLOCKED] Fanpage "${imageRecord.page.name}" đang tắt hoặc bị chặn (is_active: ${imageRecord.page.is_active}, auto_publish: ${imageRecord.page.auto_publish_enabled}, token_status: ${imageRecord.page.token_status}). Bỏ qua bài ${imageId}.`);
+        return {
+          success: true,
+          videoUrl: imageRecord.video_url || undefined,
+          message: `Fanpage đang tắt hoặc bị chặn (${imageRecord.page.token_status || 'disabled'}), không render video.`,
+        };
+      }
+    }
+
     /** Cập nhật trạng thái đang xử lý */
     await this.prisma.ztteam_images.update({
       where: { id: imageId },
