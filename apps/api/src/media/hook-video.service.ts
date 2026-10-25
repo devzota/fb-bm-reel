@@ -315,9 +315,9 @@ export class ZTTeamHookVideoService {
     }
 
     let browser: any = null;
-
     try {
-      const engine = options?.videoEngine || (imageRecord.page as any)?.video_engine || 'hook_image';
+      /** ZTTeam: Mặc định quy về 1 kiểu duy nhất là Text Story Hook 2.0 */
+      const engine = options?.videoEngine || (imageRecord.page as any)?.video_engine || 'text_story';
 
       /** 1. Chuẩn bị ảnh nguồn (đối với hook_image thì bắt buộc, text_story có thể linh hoạt) */
       const localImageCandidates = [

@@ -96,6 +96,7 @@ export class ZTTeamImageController {
     @Query('fbPageId') fbPageId?: string,
     @Query('status') status?: string,
     @Query('videoStatus') videoStatus?: string,
+    @Query('videoEngine') videoEngine?: string,
     @Query('search') search?: string,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '24',
@@ -194,6 +195,11 @@ export class ZTTeamImageController {
       } else if (vs === 'NONE') {
         where.video_status = { in: ['NONE', null] };
       }
+    }
+
+    /** ZTTeam: Lọc theo định dạng Engine Video (text_story / hook_image / muse) */
+    if (videoEngine && videoEngine.trim()) {
+      where.video_engine = videoEngine.trim();
     }
 
     /** Đếm song song số lượng bài theo từng trạng thái để hiển thị Tabs */

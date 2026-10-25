@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUIStore } from '../stores/uiStore';
 import api from '../services/api';
 
@@ -43,9 +43,16 @@ export default function ZTTeamAIPostCard({
 }: ZTTeamAIPostCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCommentExpanded, setIsCommentExpanded] = useState(false);
-  const [showVideo, setShowVideo] = useState(false);
+  const [showVideo, setShowVideo] = useState(Boolean(item.video_url));
   const [isMarkingPosted, setIsMarkingPosted] = useState(false);
   const { ztteam_showToast } = useUIStore();
+
+  /** ZTTeam: Ưu tiên hiển thị Video ngay khi bài viết đã có video_url */
+  useEffect(() => {
+    if (item.video_url) {
+      setShowVideo(true);
+    }
+  }, [item.video_url]);
 
   const isRendering = item.status === 'RENDERING' || item.status === 'PROCESSING' || item.status === 'QUEUED';
   const isCompleted = item.status === 'COMPLETED';
@@ -300,9 +307,9 @@ export default function ZTTeamAIPostCard({
               <div className="flex items-center gap-1 pointer-events-auto shrink-0">
                 {/** Nhãn phân biệt loại video: Video Hook từ ảnh vs Text Story vs Video Muse */}
                 {item.video_engine === 'text_story' || item.video_url.includes('text_story_reel_') ? (
-                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 backdrop-blur-md flex items-center gap-0.5 shadow-md" title="Text Story Reel 10s (Kính Mờ Frosted Glass & Censor)">
-                    <span className="material-symbols-outlined text-[12px]">auto_stories</span>
-                    STORY
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 backdrop-blur-md flex items-center gap-1 shadow-md" title="Story Hook 2.0 (Kính Mờ Frosted Glass 9:16 & Censor, Prompt Viral Hook)">
+                    <span className="material-symbols-outlined text-[13px]">auto_stories</span>
+                    STORY HOOK 2.0
                   </span>
                 ) : item.video_engine === 'hook_image' || item.video_url.includes('hook_reel_') || (!item.video_engine && !item.video_url.includes('muse_reel_')) ? (
                   <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-amber-500/25 text-amber-300 border border-amber-500/40 backdrop-blur-md flex items-center gap-0.5 shadow-md" title="Video Reel 10s tạo từ hình ảnh và kịch bản Hook sắc nét">

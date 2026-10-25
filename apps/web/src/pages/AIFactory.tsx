@@ -38,6 +38,7 @@ export default function AIFactory() {
   /** Filter States */
   const [filterStatus, setFilterStatus] = useState('');
   const [filterVideoStatus, setFilterVideoStatus] = useState('');
+  const [filterVideoEngine, setFilterVideoEngine] = useState('');
   const [filterPage, setFilterPage] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
@@ -69,10 +70,10 @@ export default function AIFactory() {
     ztteam_loadPages();
   }, []);
 
-  /** Fetch danh sách bài viết khi filterStatus, filterVideoStatus, filterPage, debouncedKeyword, limit hoặc currentPage thay đổi */
+  /** Fetch danh sách bài viết khi filterStatus, filterVideoStatus, filterVideoEngine, filterPage, debouncedKeyword, limit hoặc currentPage thay đổi */
   useEffect(() => {
     ztteam_loadItems();
-  }, [filterStatus, filterVideoStatus, filterPage, debouncedKeyword, currentPage, limit]);
+  }, [filterStatus, filterVideoStatus, filterVideoEngine, filterPage, debouncedKeyword, currentPage, limit]);
 
   /** SSE Live Time Update & Polling ngầm */
   useEffect(() => {
@@ -102,7 +103,7 @@ export default function AIFactory() {
       sse.close();
       clearInterval(interval);
     };
-  }, [filterStatus, filterVideoStatus, filterPage, debouncedKeyword, currentPage, limit]);
+  }, [filterStatus, filterVideoStatus, filterVideoEngine, filterPage, debouncedKeyword, currentPage, limit]);
 
   /** Tải danh sách bài viết từ API */
   const ztteam_loadItems = async (isSilent = false) => {
@@ -111,6 +112,7 @@ export default function AIFactory() {
       const params = new URLSearchParams();
       if (filterStatus) params.append('status', filterStatus);
       if (filterVideoStatus) params.append('videoStatus', filterVideoStatus);
+      if (filterVideoEngine) params.append('videoEngine', filterVideoEngine);
       if (filterPage) params.append('fbPageId', filterPage);
       if (debouncedKeyword) params.append('search', debouncedKeyword);
       params.append('page', String(currentPage));
@@ -405,6 +407,24 @@ export default function AIFactory() {
                 { value: 'PENDING', label: '⏳ Đang tạo Video' },
                 { value: 'COMPLETED', label: '🎬 Đã có Video Reel' },
                 { value: 'NONE', label: '🚫 Chưa tạo Video' },
+              ]}
+              className="w-full"
+            />
+          </div>
+
+          {/** Dropdown Lọc Định Dạng Video (Story Hook 2.0 vs Reel Ảnh ghép) */}
+          <div className="flex items-center gap-2 min-w-[210px]">
+            <CustomDropdown
+              value={filterVideoEngine}
+              onChange={(val) => {
+                setFilterVideoEngine(String(val));
+                setCurrentPage(1);
+              }}
+              options={[
+                { value: '', label: 'Tất cả định dạng Video' },
+                { value: 'text_story', label: '📖 Story Hook 2.0 (Kiểu mới)' },
+                { value: 'hook_image', label: '🎬 Video Reel Hook (Ảnh ghép)' },
+                { value: 'muse', label: '🎨 Video Muse AI' },
               ]}
               className="w-full"
             />

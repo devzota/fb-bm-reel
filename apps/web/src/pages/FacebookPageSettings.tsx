@@ -38,7 +38,7 @@ export default function FacebookPageSettings() {
 
   /** Publishing & Schedule Config State */
   const [postFormat, setPostFormat] = useState('image');
-  const [videoEngine, setVideoEngine] = useState('hook_image');
+  const [videoEngine, setVideoEngine] = useState('text_story');
   const [defaultBgm, setDefaultBgm] = useState<string>('');
   const [bgmList, setBgmList] = useState<any[]>([]);
   const [currentPlayingBgm, setCurrentPlayingBgm] = useState<string | null>(null);
@@ -246,7 +246,7 @@ export default function FacebookPageSettings() {
       setIsCheckpointBlocked(Boolean(data.isCheckpointBlocked));
       setTags(data.tags || []);
       setPostFormat(data.post_format || 'image');
-      setVideoEngine(data.video_engine || 'hook_image');
+      setVideoEngine(data.video_engine || 'text_story');
       setDefaultBgm(data.default_bgm || '');
       setAutoPublishEnabled(data.auto_publish_enabled !== undefined ? data.auto_publish_enabled : true);
       setAddLinkToCaption(data.add_link_to_caption || false);
