@@ -284,7 +284,7 @@ export class ZTTeamHookVideoService {
   async ztteam_renderHookVideo(
     imageId: string,
     options?: { bgmFilename?: string; forceRegenHook?: boolean; videoEngine?: string; forceRegenContent?: boolean }
-  ): Promise<{ success: boolean; videoUrl?: string; error?: string }> {
+  ): Promise<{ success: boolean; videoUrl?: string; error?: string; message?: string }> {
     this.logger.log(`===== START HOOK/TEXT STORY VIDEO RENDER: image=${imageId} =====`);
 
     const imageRecord = await this.prisma.ztteam_images.findUnique({
@@ -296,10 +296,10 @@ export class ZTTeamHookVideoService {
       throw new Error(`Không tìm thấy bài viết ${imageId}`);
     }
 
-    /** ZTTeam: Người dùng yêu cầu chỉ render bài CHƯA ĐĂNG, bài đã đăng rồi bỏ qua để tiết kiệm tài nguyên */
-    if (imageRecord.is_posted && !options?.forceRegenHook) {
-      this.logger.log(`Bài viết ${imageId} đã đăng lên Fanpage (is_posted = true), bỏ qua không render video.`);
-      return { success: true, videoUrl: imageRecord.video_url || undefined };
+    /** ZTTeam: Video nào đã đăng rồi (is_posted = true hoặc status = 'POSTED') TUYỆT ĐỐI KHÔNG ĐƯỢC PHÉP RENDER LẠI */
+    if (imageRecord.is_posted || imageRecord.status === 'POSTED') {
+      this.logger.warn(`Bài viết ${imageId} đã được đăng lên Facebook (is_posted: ${imageRecord.is_posted}, status: ${imageRecord.status}). Tuyệt đối cấm render lại!`);
+      return { success: true, videoUrl: imageRecord.video_url || undefined, message: 'Bài viết đã đăng lên Facebook, cấm render lại.' };
     }
 
     /** Cập nhật trạng thái đang xử lý */
