@@ -1952,9 +1952,12 @@ export class ZTTeamFacebookService {
     const sentAccountAlerts = new Set<string>();
 
     for (const acc of accounts) {
-      const activePages = acc.pages.filter(p => p.is_active !== false);
+      /** ZTTeam: Chỉ tính các trang đang bật hoạt động và bật auto publish, không trong trạng thái checkpoint */
+      const activePages = acc.pages.filter(
+        p => p.is_active !== false && p.auto_publish_enabled !== false && p.token_status !== 'checkpoint_required'
+      );
       if (activePages.length === 0) {
-        /** Skip checking account token if all pages are manually disabled */
+        /** Skip checking account token if all pages are disabled, paused or checkpointed */
         continue;
       }
 
@@ -1981,6 +1984,8 @@ export class ZTTeamFacebookService {
           continue;
         }
 
+        const wasActive = acc.status === 'active';
+
         await this.prisma.ztteam_fb_accounts.update({
           where: { id: acc.id },
           data: { status: 'expired' }
@@ -1992,7 +1997,8 @@ export class ZTTeamFacebookService {
         });
 
         const alertKey = `${acc.fb_user_id || acc.name}`;
-        if (!sentAccountAlerts.has(alertKey)) {
+        /** ZTTeam: Chỉ bắn thông báo Telegram 1 lần khi tài khoản chuyển từ active -> expired để chống spam */
+        if (!sentAccountAlerts.has(alertKey) && wasActive) {
           sentAccountAlerts.add(alertKey);
 
           const affectedPages = activePages.map(p => p.name).join(', ');
@@ -2027,7 +2033,8 @@ export class ZTTeamFacebookService {
       /** 2. Check each Page Token */
       const pageResults: any[] = [];
       for (const p of acc.pages) {
-        if (p.is_active === false) continue;
+        /** ZTTeam: Bỏ qua kiểm tra và không spam thông báo nếu Page tắt hoạt động, tắt auto_publish hoặc đang chờ checkpoint */
+        if (p.is_active === false || p.auto_publish_enabled === false || p.token_status === 'checkpoint_required') continue;
 
         let isPageValid = true;
         let pageErrorMsg = '';
@@ -2094,7 +2101,8 @@ export class ZTTeamFacebookService {
           data: pageUpdateData
         });
 
-        if (!isPageValid) {
+        /** ZTTeam: Chỉ gửi cảnh báo Telegram 1 lần khi chuyển từ active sang expired để tránh spam mỗi 30 phút */
+        if (!isPageValid && p.token_status === 'active') {
           const warnMsg = this.telegramService.ztteam_formatAlert({
             systemName: 'Giám Sát Token Fanpage',
             fanpageName: p.name,

@@ -179,7 +179,7 @@ export class ZTTeamCrawlerService {
       this.logger.log(`Target Site #${targetSiteId} được cấu hình [CHẾ ĐỘ ĐĂNG THỦ CÔNG]. Chuyển thẳng bài viết vào Kho Đăng Thủ Công độc lập.`);
     } else if (pageId) {
       const p = await this.prisma.ztteam_pages.findUnique({ where: { id: pageId } });
-      if (p) targetPages.push(p);
+      if (p && p.is_active && p.auto_publish_enabled !== false && p.token_status === 'active') targetPages.push(p);
     } else {
       /** Find candidate active pages sharing this target site & category */
       let candidatePages: any[] = [];
@@ -199,7 +199,8 @@ export class ZTTeamCrawlerService {
           include: { page: true },
         });
         for (const ls of linkedSources) {
-          if (ls.page && ls.page.is_active && !candidatePages.some(tp => tp.id === ls.page.id)) {
+          /** ZTTeam: Chỉ gán bài cho các Page đang hoạt động tốt (active, auto_publish bật, token active) */
+          if (ls.page && ls.page.is_active && ls.page.auto_publish_enabled !== false && ls.page.token_status === 'active' && !candidatePages.some(tp => tp.id === ls.page.id)) {
             candidatePages.push(ls.page);
           }
         }
@@ -215,7 +216,8 @@ export class ZTTeamCrawlerService {
           include: { page: true },
         });
         for (const ls of linkedSources) {
-          if (ls.page && ls.page.is_active && !candidatePages.some(tp => tp.id === ls.page.id)) {
+          /** ZTTeam: Chỉ gán bài cho các Page đang hoạt động tốt (active, auto_publish bật, token active) */
+          if (ls.page && ls.page.is_active && ls.page.auto_publish_enabled !== false && ls.page.token_status === 'active' && !candidatePages.some(tp => tp.id === ls.page.id)) {
             candidatePages.push(ls.page);
           }
         }

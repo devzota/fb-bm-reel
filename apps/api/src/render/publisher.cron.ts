@@ -408,13 +408,19 @@ export class ZTTeamPublisherCron {
         extractedError.includes('xác nhận danh tính') ||
         extractedError.includes('confirm your identity');
 
+      const isRateLimitSpam =
+        extractedError.includes('1390008') ||
+        extractedError.includes('1404078') ||
+        extractedError.includes('limit how often you can') ||
+        extractedError.includes('bị chặn thực hiện thao tác');
+
       let currentRetries = (reel.post_retry_count || 0) + 1;
       this.logger.error(`Failed to auto-publish reel ${reel.id} (Attempt ${currentRetries}/3): ${extractedError}`);
 
-      if (isIdentityCheckpoint) {
+      if (isIdentityCheckpoint || isRateLimitSpam) {
         /**
          * ZTTeam: Kích hoạt Circuit Breaker ngay lập tức!
-         * Meta yêu cầu xác nhận danh tính trên điện thoại.
+         * Meta yêu cầu xác nhận danh tính hoặc hạn chế tần suất spam.
          * Dừng thử lại ngay (set 3) và tạm dừng auto_publish trên Page để bảo vệ BM và các Page khác.
          */
         currentRetries = 3;
@@ -422,10 +428,10 @@ export class ZTTeamPublisherCron {
           where: { id: page.id },
           data: {
             auto_publish_enabled: false,
-            token_status: 'checkpoint_required'
+            ...(isIdentityCheckpoint ? { token_status: 'checkpoint_required' } : {})
           }
         }).catch(() => {});
-        this.logger.warn(`[CIRCUIT BREAKER] Page ${page.name} kích hoạt bảo vệ do Facebook yêu cầu xác nhận danh tính. Tạm ngưng auto-publish.`);
+        this.logger.warn(`[CIRCUIT BREAKER] Page ${page.name} kích hoạt bảo vệ (${isIdentityCheckpoint ? 'Checkpoint 4854002' : 'Meta Rate Limit 1390008'}). Tạm ngưng auto-publish.`);
       }
 
       if (currentRetries < 3) {
@@ -445,6 +451,8 @@ export class ZTTeamPublisherCron {
             post_retry_count: currentRetries,
             error_log: isIdentityCheckpoint
               ? `[CIRCUIT BREAKER] Facebook yêu cầu Quản trị viên mở điện thoại xác minh danh tính (Subcode 4854002): ${extractedError}`
+              : isRateLimitSpam
+              ? `[CIRCUIT BREAKER - RATE LIMIT] Meta tạm thời hạn chế tần suất đăng bài (Subcode 1390008). Hệ thống đã tự động tạm ngưng đăng bài để bảo vệ Page: ${extractedError}`
               : `Lỗi đăng bài sau 3 lần thử: ${extractedError}`,
           }
         });
@@ -456,13 +464,19 @@ export class ZTTeamPublisherCron {
         }
 
         const alertMsg = this.telegramService.ztteam_formatAlert({
-          systemName: isIdentityCheckpoint ? 'Xác Minh Danh Tính Fanpage' : 'Xuất Bản Fanpage (Đăng Video Reel)',
+          systemName: isIdentityCheckpoint
+            ? 'Xác Minh Danh Tính Fanpage'
+            : isRateLimitSpam
+            ? 'Bảo Vệ Giới Hạn Tần Suất Meta (Rate Limit)'
+            : 'Xuất Bản Fanpage (Đăng Video Reel)',
           fanpageName: page.name || 'Không rõ',
           postTitle: reel.wp_post_title || 'Video Reel',
           step: 'Đăng tải video Reel lên Facebook qua Graph API',
           rawError: extractedError,
           nextAction: isIdentityCheckpoint
             ? 'Hệ thống đã tự động tạm ngắt xuất bản trên Page này để bảo vệ BM. Vui lòng mở ứng dụng Facebook trên điện thoại -> Chuyển sang Page -> Đăng thử 1 bài viết để xác nhận danh tính, sau đó bật lại tự động đăng trên web.'
+            : isRateLimitSpam
+            ? 'Meta đang tạm thời giới hạn tần suất đăng bài của Page này. Hệ thống đã tự động ngắt xuất bản để Page nghỉ ngơi 24 giờ. Vui lòng không bật lại ngay để tránh bị khóa tính năng.'
             : 'Đã thử lại 3 lần thất bại. Vui lòng kiểm tra lại token Fanpage hoặc quyền đăng bài.',
           memberEmail: ownerEmail,
         });
@@ -585,13 +599,19 @@ export class ZTTeamPublisherCron {
         extractedError.includes('xác nhận danh tính') ||
         extractedError.includes('confirm your identity');
 
+      const isRateLimitSpam =
+        extractedError.includes('1390008') ||
+        extractedError.includes('1404078') ||
+        extractedError.includes('limit how often you can') ||
+        extractedError.includes('bị chặn thực hiện thao tác');
+
       let currentRetries = (image.post_retry_count || 0) + 1;
       this.logger.error(`Failed to auto-publish image ${image.id} (Attempt ${currentRetries}/3): ${extractedError}`);
 
-      if (isIdentityCheckpoint) {
+      if (isIdentityCheckpoint || isRateLimitSpam) {
         /**
          * ZTTeam: Kích hoạt Circuit Breaker ngay lập tức!
-         * Meta yêu cầu xác nhận danh tính trên điện thoại.
+         * Meta yêu cầu xác nhận danh tính hoặc hạn chế tần suất spam.
          * Dừng thử lại ngay (set 3) và tạm dừng auto_publish trên Page để bảo vệ BM và các Page khác.
          */
         currentRetries = 3;
@@ -599,10 +619,10 @@ export class ZTTeamPublisherCron {
           where: { id: page.id },
           data: {
             auto_publish_enabled: false,
-            token_status: 'checkpoint_required'
+            ...(isIdentityCheckpoint ? { token_status: 'checkpoint_required' } : {})
           }
         }).catch(() => {});
-        this.logger.warn(`[CIRCUIT BREAKER] Page ${page.name} kích hoạt bảo vệ do Facebook yêu cầu xác nhận danh tính. Tạm ngưng auto-publish.`);
+        this.logger.warn(`[CIRCUIT BREAKER] Page ${page.name} kích hoạt bảo vệ (${isIdentityCheckpoint ? 'Checkpoint 4854002' : 'Meta Rate Limit 1390008'}). Tạm ngưng auto-publish.`);
       }
 
       if (currentRetries < 3) {
@@ -622,6 +642,8 @@ export class ZTTeamPublisherCron {
             post_retry_count: currentRetries,
             error_log: isIdentityCheckpoint
               ? `[CIRCUIT BREAKER] Facebook yêu cầu Quản trị viên mở điện thoại xác minh danh tính (Subcode 4854002): ${extractedError}`
+              : isRateLimitSpam
+              ? `[CIRCUIT BREAKER - RATE LIMIT] Meta tạm thời hạn chế tần suất đăng bài (Subcode 1390008). Hệ thống đã tự động tạm ngưng đăng bài để bảo vệ Page: ${extractedError}`
               : `Lỗi đăng ảnh sau 3 lần thử: ${extractedError}`
           }
         });
@@ -633,13 +655,19 @@ export class ZTTeamPublisherCron {
         }
 
         const alertMsg = this.telegramService.ztteam_formatAlert({
-          systemName: isIdentityCheckpoint ? 'Xác Minh Danh Tính Fanpage' : 'Xuất Bản Fanpage (Đăng Ảnh 2K)',
+          systemName: isIdentityCheckpoint
+            ? 'Xác Minh Danh Tính Fanpage'
+            : isRateLimitSpam
+            ? 'Bảo Vệ Giới Hạn Tần Suất Meta (Rate Limit)'
+            : 'Xuất Bản Fanpage (Đăng Ảnh 2K)',
           fanpageName: page.name || 'Không rõ',
           postTitle: image.wp_post_title || 'Bài viết ảnh',
           step: 'Đăng tải ảnh 2K và nội dung Caption lên Fanpage Facebook',
           rawError: extractedError,
           nextAction: isIdentityCheckpoint
             ? 'Hệ thống đã tự động tạm ngắt xuất bản trên Page này để bảo vệ BM. Vui lòng mở ứng dụng Facebook trên điện thoại -> Chuyển sang Page -> Đăng thử 1 bài viết để xác nhận danh tính, sau đó bật lại tự động đăng trên web.'
+            : isRateLimitSpam
+            ? 'Meta đang tạm thời giới hạn tần suất đăng bài của Page này. Hệ thống đã tự động ngắt xuất bản để Page nghỉ ngơi 24 giờ. Vui lòng không bật lại ngay để tránh bị khóa tính năng.'
             : 'Đã thử lại 3 lần thất bại. Vui lòng kiểm tra lại token Fanpage hoặc kết nối mạng.',
           memberEmail: ownerEmail,
         });
@@ -691,6 +719,19 @@ export class ZTTeamPublisherCron {
       for (const img of pendingImages) {
         if (!img.page?.fb_page_id || !img.fb_post_id) continue;
 
+        /** Nếu page đang tắt hoạt động, tắt auto_publish hoặc đang bị giới hạn/checkpoint, bỏ qua không spam comment */
+        if (img.page.is_active === false || img.page.auto_publish_enabled === false || img.page.token_status !== 'active') {
+          await this.prisma.ztteam_images.update({
+            where: { id: img.id },
+            data: {
+              comment_step: 2, /** Dừng comment cho bài viết này */
+              post_retry_count: 0,
+              error_log: 'Bỏ qua bình luận tự động do Fanpage đang tắt hoặc bị giới hạn/checkpoint',
+            }
+          }).catch(() => {});
+          continue;
+        }
+
         /** Kiểm tra giãn cách thời gian an toàn nếu từng thử thất bại trước đó */
         if (img.post_retry_count > 0) {
           const elapsedMs = now.getTime() - new Date(img.updated_at).getTime();
@@ -738,8 +779,32 @@ export class ZTTeamPublisherCron {
           this.logger.log(`[Auto-Comment Part 2 - 2h] Successfully posted continuation comment for image ${img.id} on page ${img.page.name} (Post: ${img.fb_post_id})`);
         } catch (err: any) {
           const extractedError = ztteam_extractErrorMessage(err);
-          const currentRetries = (img.post_retry_count || 0) + 1;
+          const isIdentityCheckpoint =
+            extractedError.includes('4854002') ||
+            extractedError.includes('xác minh danh tính') ||
+            extractedError.includes('confirm your identity');
+
+          const isRateLimitSpam =
+            extractedError.includes('1390008') ||
+            extractedError.includes('1404078') ||
+            extractedError.includes('limit how often you can') ||
+            extractedError.includes('bị chặn thực hiện thao tác');
+
+          let currentRetries = (img.post_retry_count || 0) + 1;
           this.logger.error(`[Auto-Comment Part 2] Failed for image ${img.id} (Attempt ${currentRetries}/3): ${extractedError}`);
+
+          if (isIdentityCheckpoint || isRateLimitSpam) {
+            /** Kích hoạt Circuit Breaker cho Fanpage nếu bị Meta chặn */
+            currentRetries = 3;
+            await this.prisma.ztteam_pages.update({
+              where: { id: img.page.id },
+              data: {
+                auto_publish_enabled: false,
+                ...(isIdentityCheckpoint ? { token_status: 'checkpoint_required' } : {})
+              }
+            }).catch(() => {});
+            this.logger.warn(`[CIRCUIT BREAKER] Page ${img.page.name} kích hoạt bảo vệ khi comment (${isIdentityCheckpoint ? 'Checkpoint 4854002' : 'Meta Rate Limit 1390008'}). Tạm ngưng auto-publish.`);
+          }
 
           if (currentRetries < 3) {
             await this.prisma.ztteam_images.update({
@@ -757,7 +822,11 @@ export class ZTTeamPublisherCron {
               data: {
                 comment_step: 2,
                 post_retry_count: currentRetries,
-                error_log: `Lỗi đăng Part 2 sau 3 lần thử (giãn cách 5-10 phút): ${extractedError}`,
+                error_log: isIdentityCheckpoint
+                  ? `[CIRCUIT BREAKER] Page cần xác minh danh tính khi comment: ${extractedError}`
+                  : isRateLimitSpam
+                  ? `[CIRCUIT BREAKER - RATE LIMIT] Meta hạn chế tần suất comment: ${extractedError}`
+                  : `Lỗi đăng Part 2 sau 3 lần thử (giãn cách 5-10 phút): ${extractedError}`,
               }
             }).catch(() => { });
 
@@ -768,12 +837,20 @@ export class ZTTeamPublisherCron {
             }
 
             const alertMsg = this.telegramService.ztteam_formatAlert({
-              systemName: 'Tự Động Bình Luận (Auto-Comment)',
+              systemName: isIdentityCheckpoint
+                ? 'Xác Minh Danh Tính Fanpage (Bình luận)'
+                : isRateLimitSpam
+                ? 'Bảo Vệ Giới Hạn Tần Suất Meta (Bình luận)'
+                : 'Tự Động Bình Luận (Auto-Comment)',
               fanpageName: img.page?.name || 'Không rõ',
               postTitle: img.wp_post_title || 'Bài viết ảnh 2K',
               step: 'Đăng bình luận đoạn nối tiếp (Part 2) sau 2 tiếng',
               rawError: extractedError,
-              nextAction: 'Đã thử lại 3 lần (giãn cách an toàn 5-10 phút) đều thất bại. Hệ thống đã kết thúc quy trình.',
+              nextAction: isIdentityCheckpoint
+                ? 'Hệ thống đã tự động tạm ngắt xuất bản trên Page này để bảo vệ BM. Vui lòng mở ứng dụng Facebook trên điện thoại -> Xác minh danh tính.'
+                : isRateLimitSpam
+                ? 'Meta đang tạm thời giới hạn tần suất của Page này. Hệ thống đã tạm ngắt xuất bản để Page nghỉ ngơi.'
+                : 'Đã thử lại 3 lần (giãn cách an toàn 5-10 phút) đều thất bại. Hệ thống đã kết thúc quy trình.',
               memberEmail: ownerEmail,
             });
             this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
