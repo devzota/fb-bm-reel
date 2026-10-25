@@ -372,25 +372,26 @@ export class ZTTeamHookVideoService {
         const theme = ztteam_getTextStoryTheme(pageKey);
         this.logger.log(`[Text Story Reel] Fanpage "${pageName}" sử dụng bộ theme: ${theme.name}`);
 
-        const rawStory = imageRecord.ai_caption || imageRecord.wp_post_title || '';
+        /** Lấy toàn bộ cốt truyện từ ai_script hoặc kết hợp caption + first_comment */
+        const rawStory = imageRecord.ai_script || (imageRecord.ai_caption + '\n\n' + (imageRecord.ai_first_comment || '')) || imageRecord.wp_post_title || '';
         const storyData = await this.aiService.ztteam_generateTextStoryCardContent(
           imageRecord.wp_post_title || 'Compelling Story',
           rawStory
         );
 
         const wordCount = storyData.plainText.trim().split(/\s+/).length;
-        let fontSize = 33.5;
-        let lineHeight = 1.28;
-        let pGap = 14;
+        let fontSize = 36;
+        let lineHeight = 1.34;
+        let pGap = 16;
 
-        if (wordCount < 230) {
-          fontSize = 35.5;
-          lineHeight = 1.32;
-          pGap = 16;
-        } else if (wordCount > 290) {
-          fontSize = 31.5;
-          lineHeight = 1.24;
-          pGap = 12;
+        if (wordCount < 180) {
+          fontSize = 38;
+          lineHeight = 1.36;
+          pGap = 18;
+        } else if (wordCount > 230) {
+          fontSize = 33.5;
+          lineHeight = 1.28;
+          pGap = 14;
         }
 
         const htmlContent = `<!DOCTYPE html>
@@ -764,7 +765,7 @@ export class ZTTeamHookVideoService {
 
       /** 3. Tạo kịch bản Hook 3 đoạn bám sát nội dung gốc bằng AI */
       let hookHtml = '';
-      const rawStory = imageRecord.ai_caption || imageRecord.wp_post_title || '';
+      const rawStory = imageRecord.ai_script || (imageRecord.ai_caption + '\n\n' + (imageRecord.ai_first_comment || '')) || imageRecord.wp_post_title || '';
 
       const aiResult = await this.aiService.ztteam_generateReelHookStory(
         imageRecord.wp_post_title || 'Compelling Mystery Story',

@@ -49,7 +49,7 @@ export class ZTTeamAIService {
     const { GoogleGenerativeAI } = require('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(geminiKey);
 
-    const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite'];
+    const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
     let lastError: any = null;
 
     for (const modelName of modelsToTry) {
@@ -807,10 +807,14 @@ CRITICAL REQUIREMENTS:
 
   /**
    * ZTTeam: Định dạng nội dung câu chuyện cho Text Story Reel (9:16 Frosted Glass)
-   * - Bao gồm 1 câu Hook mở đầu kịch tính trong ngoặc kép (Quote)
-   * - Tiếp theo là 5-6 đoạn văn dày dặn (~250 - 280 từ) bám sát 100% cốt truyện gốc
+   * Theo chuẩn PROMPT: VIRAL FACEBOOK STORY HOOK GENERATOR
+   * - Hướng tới khán giả Mỹ 35-65 tuổi
+   * - Cấu trúc 6 bước: INJUSTICE -> CONFLICT -> EMOTIONAL TENSION -> HIDDEN ADVANTAGE -> POWER REVERSAL -> CLIFFHANGER
+   * - Độ dài chuẩn hóa: 160 - 220 từ tiếng Anh
+   * - Mở đầu: Hook 1-2 câu kịch tính
+   * - Thân bài: 4-6 đoạn ngắn (1-3 câu/đoạn)
+   * - Kết thúc: Final cliffhanger 2-3 câu lôi cuốn
    * - Tự động bọc từ khóa cao trào bằng <span class="hl">...</span>
-   * - Lấp kín card 1575px, để trống đúng ~10% ở đáy màn hình
    */
   async ztteam_generateTextStoryCardContent(
     title: string,
@@ -819,23 +823,50 @@ CRITICAL REQUIREMENTS:
     const cleanTitle = (title || '').replace(/<[^>]*>?/gm, '').trim();
     const cleanContent = (content || '').replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
 
-    const systemPrompt = `You are a master viral Facebook Story copywriter specializing in high-suspense Text Story Reels.
-Based strictly on the provided real story:
+    const systemPrompt = `# PROMPT: VIRAL FACEBOOK STORY HOOK GENERATOR
+
+You are an expert English-language storyteller specializing in emotionally compelling Facebook story posts for American audiences aged 35–65.
+
+Your task is to read the full story provided below and transform it into ONE powerful, suspenseful opening story designed to capture attention, encourage readers to keep reading, and create genuine curiosity about what happens next.
+
+## 1. CORE STORYTELLING STRUCTURE
+Follow this emotional progression:
+INJUSTICE → CONFLICT → EMOTIONAL TENSION → HIDDEN ADVANTAGE → POWER REVERSAL → CLIFFHANGER
+
+- Begin with a shocking, unfair, or emotionally painful situation.
+- Introduce the antagonist and their selfish or manipulative behavior.
+- Make the reader emotionally connect with the protagonist.
+- Reveal that the protagonist knows something the antagonist doesn't.
+- Gradually build anticipation toward a satisfying revelation.
+- End on a high-stakes cliffhanger before the final outcome is revealed.
+
+## 2. WRITING REQUIREMENTS
+- Language: Natural American English.
+- Tone: Dramatic, emotional, relatable, and suspenseful.
+- Target word count: 160–220 words (Strictly enforce this range).
+- Formatting: Short paragraphs (1–3 sentences each) for effortless reading on mobile screens.
+- Perspective: Third-person storytelling.
+
+## 3. CONTENT TO AVOID
+- Do NOT summarize the ending.
+- Do NOT resolve the conflict.
+- Do NOT explain morals or lessons.
+- Do NOT use buzzwords like "delve", "testament", "tapestry", "in conclusion", or generic hype.
+- Do NOT mention that this is an excerpt, preview, or AI-generated text.
+
+## 4. OUTPUT FORMAT
+Write the story using this exact structure:
+Opening hook: 1–2 sentences that immediately pull the reader in.
+Story development: 4–6 short paragraphs building tension and detailing the unfolding conflict.
+Final cliffhanger: 2–3 sentences that leave the reader desperate to know what happens next.
+Last line (exact text): Continue Reading...
+
+Strictly adhere to the 160–220 word count limit.
+
+STORY SOURCE:
 Title: "${cleanTitle}"
-Story Details:
-"${cleanContent.substring(0, 4500)}"
-
-Task:
-Format and condense this real story into a dense, electrifying viral Text Story for a 9:16 vertical card.
-
-CRITICAL REQUIREMENTS:
-1. TRUTHFUL TO ORIGINAL: Every character, quote, and detail must come strictly from the provided story.
-2. FIRST LINE: A dramatic, quote-based opening hook line (1 short sentence in quotation marks, e.g. "Get in the back, Lena. Paige needs your seat.")
-3. STORY BODY: Exactly 5 or 6 paragraphs.
-4. TOTAL LENGTH: Total word count across the body MUST be between 250 and 280 words so it fills the screen card completely without leaving empty space.
-5. HIGHLIGHTS: In each paragraph, wrap 1 or 2 dramatic phrases or key quotes in <span class="hl">...</span>.
-6. SUSPENSE CLIFFHANGER: End on an intense high-stakes moment or revelation that compels the viewer to read the rest in the comments.
-7. FORMAT: Return the opening hook quote on line 1, followed by a blank line, followed by the 5-6 paragraphs separated by blank lines. No numbering, no markdown headers.`;
+Full Story:
+"${cleanContent.substring(0, 7500)}"`;
 
     try {
       const settings = await this.getSettings();
@@ -845,7 +876,7 @@ CRITICAL REQUIREMENTS:
         rawResponse = await this.ztteam_callGeminiWithFallback(
           settings.geminiKey,
           systemPrompt,
-          { temperature: 0.75, maxTokens: 600 }
+          { temperature: 0.75, maxTokens: 800 }
         );
       } else {
         const OpenAI = require('openai').default;
@@ -862,7 +893,7 @@ CRITICAL REQUIREMENTS:
             messages: [
               { role: 'user', content: systemPrompt },
             ],
-            max_tokens: 600,
+            max_tokens: 800,
             temperature: 0.75,
           });
           rawResponse = response.choices[0]?.message?.content || '';
@@ -870,19 +901,33 @@ CRITICAL REQUIREMENTS:
       }
 
       if (rawResponse && rawResponse.trim().length > 100) {
-        const chunks = rawResponse
-          .trim()
+        /** ZTTeam: Loại bỏ nhãn markdown do AI sinh ra (Opening hook:, Story development:, Final cliffhanger:) */
+        const cleanRaw = rawResponse
+          .replace(/\*\*?(Opening hook|Story development|Final cliffhanger):\*\*?/gi, '')
+          .replace(/^(Opening hook|Story development|Final cliffhanger):\s*/gim, '')
+          .trim();
+
+        const chunks = cleanRaw
           .split(/\n\s*\n/)
           .map(p => p.trim())
-          .filter(p => p.length > 0);
+          .filter(p => p.length > 0 && !p.toLowerCase().startsWith('continue reading'));
 
-        if (chunks.length >= 4) {
-          const hookQuote = chunks[0].replace(/^["'“”]+|["'“”]+$/g, '').trim();
-          const paragraphs = chunks.slice(1);
-          const plainText = paragraphs.join('\n\n').replace(/<[^>]*>?/gm, '');
+        if (chunks.length >= 3) {
+          const hookOpening = chunks[0].replace(/^["'“”]+|["'“”]+$/g, '').trim();
+          const bodyParagraphs = chunks.slice(1);
+
+          /** Tự động bọc từ khóa cao trào bằng <span class="hl">...</span> nếu chưa có */
+          const highlightRegex = /\b(million|billion|contract|merger|debt|signed|signature|lawyer|fired|cleaner|secret|evidence|daughter|son|husband|wife|mother|father|will|inheritance|trap|paper|smile|ruined|truth|clause|jointly|rewritten|hospital|police|money|court|judge|arrested|guilty)\b/gi;
+          const formattedBody = bodyParagraphs.map(p => {
+            if (p.includes('<span class="hl">')) return p;
+            return p.replace(highlightRegex, (m) => `<span class="hl">${m}</span>`);
+          });
+
+          const plainText = [hookOpening, ...bodyParagraphs].join('\n\n').replace(/<[^>]*>?/gm, '');
+
           return {
-            hookQuote: `“${hookQuote}”`,
-            paragraphs,
+            hookQuote: hookOpening,
+            paragraphs: formattedBody,
             plainText,
           };
         }
@@ -891,34 +936,35 @@ CRITICAL REQUIREMENTS:
       this.logger.warn(`AI text story generation warning: ${err.message}. Chuyển sang trích xuất trực tiếp.`);
     }
 
-    /** ZTTeam: Fallback thông minh nếu AI lỗi hoặc không có API key - tự động trích xuất 260 từ từ nội dung gốc */
+    /** ZTTeam: Fallback thông minh nếu AI lỗi hoặc không có API key - tự động trích xuất 180-200 từ từ nội dung gốc */
     return this.ztteam_fallbackTextStoryExtract(cleanTitle, cleanContent);
   }
 
   /**
-   * ZTTeam: Thuật toán fallback trích xuất 250 - 280 từ trực tiếp từ bài viết gốc
+   * ZTTeam: Thuật toán fallback trích xuất 180 - 200 từ trực tiếp từ bài viết gốc
    */
   private ztteam_fallbackTextStoryExtract(
     title: string,
     content: string,
   ): { hookQuote: string; paragraphs: string[]; plainText: string } {
-    const hookQuote = title.length > 5 ? `“${title}”` : '“A Story You Need To Hear...”';
+    const hookQuote = title.length > 5 ? title : 'A Shocking Revelation Nobody Saw Coming...';
     const rawWords = content.split(/\s+/).filter(w => w.length > 0);
-    const targetWords = rawWords.slice(0, 270);
+    const targetWords = rawWords.slice(0, 190);
 
-    /** Chia 270 từ thành 5-6 đoạn */
-    const paragraphCount = 5;
+    /** Chia ~190 từ thành 4-5 đoạn */
+    const paragraphCount = 4;
     const chunkSize = Math.ceil(targetWords.length / paragraphCount);
     const paragraphs: string[] = [];
 
+    const highlightRegex = /\b(husband|wife|marriage|hospital|police|secret|truth|money|million|house|car|lawyer|divorce|pain|tears|betrayal|revenge|company|contract|signed|debt|daughter|son)\b/gi;
+
     for (let i = 0; i < targetWords.length; i += chunkSize) {
       let pText = targetWords.slice(i, i + chunkSize).join(' ');
-      /** Tự động bôi vàng từ khóa bằng regex trên một số từ/cụm từ cảm xúc */
-      pText = pText.replace(/\b(husband|wife|marriage|hospital|police|secret|truth|money|million|house|car|lawyer|divorce|pain|tears|betrayal|revenge|company)\b/gi, (m) => `<span class="hl">${m}</span>`);
+      pText = pText.replace(highlightRegex, (m) => `<span class="hl">${m}</span>`);
       paragraphs.push(pText);
     }
 
-    const plainText = paragraphs.join('\n\n').replace(/<[^>]*>?/gm, '');
+    const plainText = [hookQuote, ...paragraphs].join('\n\n').replace(/<[^>]*>?/gm, '');
     return { hookQuote, paragraphs, plainText };
   }
 

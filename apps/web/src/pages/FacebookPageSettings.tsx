@@ -922,15 +922,15 @@ export default function FacebookPageSettings() {
                       <span className="material-symbols-outlined text-cyan-400 text-[16px] mt-0.5 shrink-0">check_circle</span>
                       <div>
                         <strong className="text-fb-text block">Caption sạch — Tránh bị Facebook bóp tương tác:</strong>
-                        <span>Không chèn link trực tiếp vào Caption. Hệ thống tự động gắn câu kết chuẩn: <code>...FULL STORY IN THE COMMENT 👇👇👇</code></span>
+                        <span>Không chèn link trực tiếp vào Caption. Hệ thống tự động gắn câu kết chuẩn: <code>...CONTINUED IN THE COMMENTS 👇👇👇</code></span>
                       </div>
                     </div>
 
                     <div className="flex items-start gap-2 bg-black/20 p-2.5 rounded-xl border border-white/5">
                       <span className="material-symbols-outlined text-emerald-400 text-[16px] mt-0.5 shrink-0">mark_chat_read</span>
                       <div>
-                        <strong className="text-fb-text block">Quy trình Bình luận 2 bước tối ưu Reach:</strong>
-                        <span><strong>Sau 60 phút:</strong> Tự động thả bình luận mồi câu "YES" kích hoạt thuật toán; <strong>Sau 15 phút tiếp theo:</strong> Tự động reply vào bình luận mồi kèm Part 2 và link website WordPress.</span>
+                        <strong className="text-fb-text block">Tự động bình luận đoạn nối tiếp (Part 2) sau 2 tiếng:</strong>
+                        <span><strong>Sau đúng 2 tiếng (120 phút):</strong> Hệ thống tự động đăng trích đoạn Part 2 nối tiếp câu chuyện. Tuyệt đối không có link ngoài, tối ưu 100% Organic Reach và chống hoàn toàn lỗi spam block.</span>
                       </div>
                     </div>
                   </div>

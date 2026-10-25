@@ -522,7 +522,7 @@ export class ZTTeamFetcherService {
   ztteam_extractStoryParts(
     content: string,
     maxPart1Chars: number = 900,
-    maxPart2Chars: number = 700
+    maxPart2Chars: number = 2200
   ): { part1: string; part2: string } {
     if (!content) return { part1: '', part2: '' };
 

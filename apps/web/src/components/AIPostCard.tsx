@@ -18,35 +18,10 @@ export interface ZTTeamAIPostCardProps {
 }
 
 /**
- * ZTTeam: Kho Mồi Kích Hoạt Đa Dạng (Dynamic Viral Hook Comments)
+ * ZTTeam: Cơ chế bình luận nối tiếp (Part 2) tự động sau 2 tiếng:
+ * - Thay thế toàn bộ bình luận mồi "YES" và link ngoài
+ * - Đăng trích đoạn Part 2 nối tiếp câu chuyện 100% văn bản thuần túy
  */
-const ZTTEAM_HOOK_TEMPLATES = [
-  `...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇`,
-  `...Want to know the full truth of what happened next? Drop a "YES" or "NEXT" below! 👇🔥`,
-  `...The next part will leave you completely speechless! Leave "YES" in the comments if you want me to share it right away! 👇✨`,
-  `...Curious about the unexpected twist? Comment "YES" down below to continue reading! 👇👀`,
-  `...If you're eager to see how this story ends, let me know by leaving a "YES" in the comments! 👇❤️`,
-  `...Things took a crazy turn right after this! Drop "YES" below and I'll post the continuation! 👇💬`,
-  `...Can you guess what happened next? Leave "YES" in the comments if you want the next part! 👇👇`,
-  `...The ending completely shocked everyone! Comment "YES" or "MORE" below if you want the full story! 👇⚡`,
-  `...Are you ready for the shocking revelation? Leave "YES" down below to find out! 👇😲`,
-  `...You won't believe what they discovered next! Comment "YES" below and I'll send you the rest! 👇🙏`,
-  `...Want to know how this ends? Drop a quick "YES" below and I'll unlock Part 2 for you! 👇💫`,
-  `...I was blown away when I read the ending! Leave "YES" below if you want the conclusion! 👇📖`
-];
-
-function ztteam_getHookTextForPost(seed?: string): string {
-  if (seed) {
-    let hash = 0;
-    for (let i = 0; i < seed.length; i++) {
-      hash = (hash << 5) - hash + seed.charCodeAt(i);
-      hash |= 0;
-    }
-    const index = Math.abs(hash) % ZTTEAM_HOOK_TEMPLATES.length;
-    return ZTTEAM_HOOK_TEMPLATES[index];
-  }
-  return ZTTEAM_HOOK_TEMPLATES[0];
-}
 
 /**
  * Reusable Unified AI Post Card Component
@@ -67,6 +42,7 @@ export default function ZTTeamAIPostCard({
   onMarkPosted,
 }: ZTTeamAIPostCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isCommentExpanded, setIsCommentExpanded] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
   const [isMarkingPosted, setIsMarkingPosted] = useState(false);
   const { ztteam_showToast } = useUIStore();
@@ -96,22 +72,16 @@ export default function ZTTeamAIPostCard({
     }
   };
 
-  const dynamicHookText = ztteam_getHookTextForPost(item.id);
-
-  const ztteam_handleCopyComment1 = (e: React.MouseEvent) => {
+  /** ZTTeam: Sao chép nội dung bình luận Part 2 nối tiếp */
+  const ztteam_handleCopyCommentPart2 = (e: React.MouseEvent) => {
     e.stopPropagation();
+    const commentPart2Text = (item.ai_first_comment || '')
+      .replace(/👉\s*FULL STORY.*$/is, '')
+      .replace(/https?:\/\/[^\s]+/gi, '')
+      .trim();
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(dynamicHookText);
-      ztteam_showToast('Đã sao chép Bình luận mồi kích hoạt!', 'success');
-    }
-  };
-
-  const ztteam_handleCopyComment2 = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const comment2Text = item.ai_first_comment || `👉 FULL STORY HERE 👇👇👇\n${item.wp_post_url || ''}`;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(comment2Text);
-      ztteam_showToast('Đã sao chép Bình luận link Part 2!', 'success');
+      navigator.clipboard.writeText(commentPart2Text || 'Chưa có nội dung nối tiếp Part 2.');
+      ztteam_showToast('Đã sao chép nội dung bình luận Part 2!', 'success');
     }
   };
 
@@ -535,97 +505,72 @@ export default function ZTTeamAIPostCard({
         </div>
       </div>
 
-      {/** 6. Two-Step Delayed Comment Preview (Mô phỏng 2 tầng bình luận Facebook) */}
-      <div className="mx-4 mb-3 p-3 bg-fb-surface-hover/80 rounded-xl border border-white/5 space-y-3">
-        {/** Tầng 1: Bình luận mồi YES (T = 60 phút) */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between gap-1 text-[11px] font-bold text-fb-text">
-            <div className="flex items-center gap-1.5 text-blue-400">
-              <span className="material-symbols-outlined text-[14px]">bolt</span>
-              <span>Bình luận 1: Mồi kích hoạt (Sau 1h)</span>
-              <button
-                type="button"
-                onClick={ztteam_handleCopyComment1}
-                className="text-[10px] font-bold text-blue-300 hover:text-white flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-500/20 hover:bg-blue-500/30 rounded border border-blue-500/30 transition-colors cursor-pointer ml-1"
-                title="Sao chép bình luận mồi"
-              >
-                <span className="material-symbols-outlined text-[12px]">content_copy</span>
-                <span>Copy</span>
-              </button>
-            </div>
-
-            {isAlreadyPosted ? (
-              item.comment_step >= 1 ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[12px]">check</span>
-                  Đã thả mồi
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[12px]">hourglass_top</span>
-                  Chờ đủ 1h
-                </span>
-              )
-            ) : (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[12px]">schedule</span>
-                Tự động sau 1h
-              </span>
-            )}
+      {/** 6. ZTTeam: Bình luận nối tiếp (Part 2) tự động sau 2 tiếng */}
+      <div className="mx-4 mb-3 p-3 bg-fb-surface-hover/80 rounded-xl border border-white/5 space-y-2">
+        <div className="flex items-center justify-between gap-1 text-[11px] font-bold text-fb-text">
+          <div className="flex items-center gap-1.5 text-cyan-400">
+            <span className="material-symbols-outlined text-[15px]">forum</span>
+            <span>Bình luận nối tiếp (Part 2) — Sau 2 tiếng</span>
+            <button
+              type="button"
+              onClick={ztteam_handleCopyCommentPart2}
+              className="text-[10px] font-bold text-cyan-300 hover:text-white flex items-center gap-0.5 px-2 py-0.5 bg-cyan-500/20 hover:bg-cyan-500/30 rounded border border-cyan-500/30 transition-colors cursor-pointer ml-1"
+              title="Sao chép nội dung bình luận Part 2"
+            >
+              <span className="material-symbols-outlined text-[12px]">content_copy</span>
+              <span>Copy Part 2</span>
+            </button>
           </div>
 
-          <p className="text-[11px] text-blue-200/90 bg-blue-950/40 p-2 rounded-lg border border-blue-500/20 select-all leading-relaxed italic">
-            {dynamicHookText}
-          </p>
-        </div>
-
-        {/** Tầng 2: Bình luận lồng nhau Reply Part 2 & Link (Sau 5h) */}
-        <div className="ml-3 pl-2.5 border-l-2 border-blue-500/30 space-y-1.5">
-          <div className="flex items-center justify-between gap-1 text-[11px] font-bold text-fb-text">
-            <div className="flex items-center gap-1 text-cyan-400">
-              <span className="material-symbols-outlined text-[14px]">reply</span>
-              <span>Bình luận 2: Trả lời Part 2 & Link</span>
-              <button
-                type="button"
-                onClick={ztteam_handleCopyComment2}
-                className="text-[10px] font-bold text-cyan-300 hover:text-white flex items-center gap-0.5 px-1.5 py-0.5 bg-cyan-500/20 hover:bg-cyan-500/30 rounded border border-cyan-500/30 transition-colors cursor-pointer ml-1"
-                title="Sao chép bình luận Part 2 & link"
-              >
-                <span className="material-symbols-outlined text-[12px]">content_copy</span>
-                <span>Copy</span>
-              </button>
-            </div>
-
-            {isAlreadyPosted ? (
-              item.comment_step === 2 ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[12px]">done_all</span>
-                  Đã trả lời
-                </span>
-              ) : item.comment_step === 1 ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
-                  Chờ 5h
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[12px]">hourglass_empty</span>
-                  Chờ bước 1
-                </span>
-              )
-            ) : (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[12px]">schedule</span>
-                Tự động sau 5h
+          {isAlreadyPosted ? (
+            item.comment_step === 2 ? (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px]">done_all</span>
+                Đã đăng Part 2
               </span>
-            )}
-          </div>
-
-          <p className="text-[11px] text-fb-text-muted line-clamp-4 whitespace-pre-line select-all leading-relaxed bg-black/30 p-2 rounded-lg border border-white/5 font-mono">
-            {item.ai_first_comment ||
-              `👉 FULL STORY HERE 👇👇👇\n${item.wp_post_url || 'https://thieponline.store'}`}
-          </p>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px]">schedule</span>
+                Chờ đủ 2 tiếng
+              </span>
+            )
+          ) : (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[12px]">schedule</span>
+              Tự động sau 2 tiếng
+            </span>
+          )}
         </div>
+
+        <div
+          className={`text-[11px] text-fb-text/90 whitespace-pre-line select-all leading-relaxed bg-black/30 p-2.5 rounded-lg border border-white/5 font-normal ${
+            isCommentExpanded ? '' : 'line-clamp-3'
+          }`}
+        >
+          {item.ai_first_comment ? (
+            item.ai_first_comment
+              .replace(/👉\s*FULL STORY.*$/is, '')
+              .replace(/https?:\/\/[^\s]+/gi, '')
+              .trim() || 'Chưa có nội dung nối tiếp Part 2.'
+          ) : (
+            'Chưa có nội dung nối tiếp Part 2.'
+          )}
+        </div>
+
+        {item.ai_first_comment && item.ai_first_comment.length > 150 && (
+          <div className="flex justify-end pt-0.5">
+            <button
+              type="button"
+              onClick={() => setIsCommentExpanded(!isCommentExpanded)}
+              className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-0.5 transition-colors cursor-pointer"
+            >
+              <span>{isCommentExpanded ? 'Thu gọn bình luận' : 'Xem toàn bộ bình luận'}</span>
+              <span className="material-symbols-outlined text-[13px]">
+                {isCommentExpanded ? 'expand_less' : 'expand_more'}
+              </span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/** 7. Actions Footer Bar */}

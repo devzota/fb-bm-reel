@@ -233,6 +233,7 @@ export class ZTTeamImageProcessor implements OnModuleInit {
     let wpPostData: any = null;
     let authHeader: string | null = null;
     let wpUrl: string | null = null;
+    let fullCleanStory: string | null = null;
 
     /** Try fetching full story content and post metadata from WordPress */
     if (wpPostId) {
@@ -258,8 +259,8 @@ export class ZTTeamImageProcessor implements OnModuleInit {
             });
             wpPostData = res.data;
             if (wpPostData?.content?.rendered) {
-              const cleanText = wpPostData.content.rendered.replace(/<[^>]+>/g, ' ').trim();
-              storyContent = (wpPostData.title?.rendered || image.wp_post_title || '') + '\n\n' + cleanText;
+              fullCleanStory = wpPostData.content.rendered.replace(/<[^>]+>/g, ' ').trim();
+              storyContent = (wpPostData.title?.rendered || image.wp_post_title || '') + '\n\n' + fullCleanStory;
             }
           }
         }
@@ -364,17 +365,14 @@ export class ZTTeamImageProcessor implements OnModuleInit {
         rawContent = storyContent;
       }
 
-      const { part1, part2 } = this.ztteam_extractStoryParts(rawContent, 900, 700);
-      const postUrl = wpPostData?.link || image.wp_post_url || '';
-
+      const { part1, part2 } = this.ztteam_extractStoryParts(rawContent, 900, 2200);
       if (!isCurrentCaptionValid) {
-        const captionCTA = '...FULL STORY IN THE COMMENT 👇👇👇';
+        const captionCTA = '...CONTINUED IN THE COMMENTS 👇👇👇';
         finalCaption = part1 ? `${titleUppercase}\n\n${part1}\n\n${captionCTA}` : `${titleUppercase}\n\n${captionCTA}`;
       }
 
       if (!isCurrentCommentValid) {
-        const commentCTA = postUrl ? `👉 FULL STORY HERE 👇👇👇\n${postUrl}` : '👉 FULL STORY IN THE LINK';
-        finalComment = part2 ? `${part2}\n\n${commentCTA}` : commentCTA;
+        finalComment = part2 ? `${part2}` : null;
       }
     }
 
@@ -384,6 +382,7 @@ export class ZTTeamImageProcessor implements OnModuleInit {
       template_id: 'sangtao_2k',
       ai_caption: finalCaption,
       ai_first_comment: finalComment,
+      ai_script: fullCleanStory || image.ai_script || null,
       error_log: null,
     });
 
@@ -396,7 +395,7 @@ export class ZTTeamImageProcessor implements OnModuleInit {
   private ztteam_extractStoryParts(
     content: string,
     maxPart1Chars: number = 900,
-    maxPart2Chars: number = 700
+    maxPart2Chars: number = 2200
   ): { part1: string; part2: string } {
     if (!content) return { part1: '', part2: '' };
 

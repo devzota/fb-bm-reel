@@ -164,7 +164,7 @@ export class ZTTeamCrawlerService {
 
     /** 4. Prepare Fanpage Resource: TITLE VIẾT HOA + Part 1 Hook + Part 2 cho comment */
     const titleUppercase = storyTitle.toUpperCase();
-    const { part1, part2 } = this.fetcherService.ztteam_extractStoryParts(cleanContent, 900, 700);
+    const { part1, part2 } = this.fetcherService.ztteam_extractStoryParts(cleanContent, 900, 2200);
 
     /** 5. Determine Target Fanpage (Exclusive 1 Post per Fanpage across same Source & Category) */
     const targetPages: any[] = [];
@@ -275,15 +275,18 @@ export class ZTTeamCrawlerService {
     let createdImageId: string | undefined = undefined;
 
     for (const targetPage of targetPages) {
-      /** Prepare Caption & First Comment based on Facebook Viral standard */
-      const captionCTA = '...FULL STORY IN THE COMMENT 👇👇👇';
+      /**
+       * ZTTeam: Chuẩn bị Caption và First Comment nối tiếp:
+       * - Caption: Title + Part 1 + Cliffhanger kêu gọi xem tiếp ở bình luận
+       * - First Comment: Thuần túy đoạn văn bản Part 2 (phần nối tiếp), tuyệt đối KHÔNG có link
+       */
+      const captionCTA = '...CONTINUED IN THE COMMENTS 👇👇👇';
       let fanpageCaption = `${titleUppercase}\n\n${part1}\n\n${captionCTA}`;
       if (targetPage.add_link_to_caption) {
         fanpageCaption += `\n\n👉 Read full story here: ${wpResult.url}`;
       }
 
-      const commentCTA = `👉 FULL STORY HERE 👇👇👇\n${wpResult.url}`;
-      let firstCommentText: string | null = part2 ? `${part2}\n\n${commentCTA}` : commentCTA;
+      let firstCommentText: string | null = part2 ? `${part2}` : null;
 
       let imgRecord = await this.prisma.ztteam_images.findFirst({
         where: {
@@ -303,6 +306,7 @@ export class ZTTeamCrawlerService {
             template_id: currentTemplateId,
             image_url: image2kUrl,
             ai_caption: fanpageCaption,
+            ai_script: cleanContent || null,
             ai_first_comment: firstCommentText,
             comment_step: 0,
             status: 'COMPLETED',
@@ -321,6 +325,7 @@ export class ZTTeamCrawlerService {
             template_id: currentTemplateId,
             image_url: image2kUrl,
             ai_caption: fanpageCaption,
+            ai_script: cleanContent || null,
             ai_first_comment: firstCommentText,
             comment_step: 0,
             status: 'COMPLETED', /** Ready for publisher.cron to post to Facebook! */
@@ -369,10 +374,9 @@ export class ZTTeamCrawlerService {
 
     /** ZTTeam: Trường hợp KHÔNG CÓ Fanpage nào hoạt động -> Lưu bài viết vào Kho Đăng Thủ Công độc lập (page_id = null) */
     if (targetPages.length === 0) {
-      const captionCTA = '...FULL STORY IN THE COMMENT 👇👇👇';
+      const captionCTA = '...CONTINUED IN THE COMMENTS 👇👇👇';
       const fanpageCaption = `${titleUppercase}\n\n${part1}\n\n${captionCTA}`;
-      const commentCTA = `👉 FULL STORY HERE 👇👇👇\n${wpResult.url}`;
-      const firstCommentText = part2 ? `${part2}\n\n${commentCTA}` : commentCTA;
+      const firstCommentText = part2 ? `${part2}` : null;
 
       let imgRecord = await this.prisma.ztteam_images.findFirst({
         where: {
@@ -390,6 +394,7 @@ export class ZTTeamCrawlerService {
             template_id: currentTemplateId,
             image_url: image2kUrl,
             ai_caption: fanpageCaption,
+            ai_script: cleanContent || null,
             ai_first_comment: firstCommentText,
             comment_step: 0,
             status: 'COMPLETED',
@@ -408,6 +413,7 @@ export class ZTTeamCrawlerService {
             template_id: currentTemplateId,
             image_url: image2kUrl,
             ai_caption: fanpageCaption,
+            ai_script: cleanContent || null,
             ai_first_comment: firstCommentText,
             comment_step: 0,
             status: 'COMPLETED',

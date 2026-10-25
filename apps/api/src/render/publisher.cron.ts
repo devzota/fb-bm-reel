@@ -70,7 +70,7 @@ export class ZTTeamPublisherCron {
     this.isRunning = true;
 
     try {
-      /** 0. Xử lý quy trình comment tự động sau 1 giờ và reply Part 2 sau 15 phút cho các bài đã đăng */
+      /** 0. Xử lý quy trình tự động đăng bình luận nối tiếp (Part 2) sau 2 tiếng cho các bài đã đăng */
       await this.ztteam_handleDelayedComments();
 
       /** 1. Tìm các Reel đã render xong đang chờ đăng (xếp theo thời gian tạo cũ nhất trước) */
@@ -381,25 +381,12 @@ export class ZTTeamPublisherCron {
         description
       );
 
-      if (page.add_link_to_comment && reel.wp_post_url && response.id) {
-        try {
-          const commentPrefixes = [
-            '👉 Discover more here:',
-            '🔥 Read the full story:',
-            '📌 Check out the details:',
-            '👇 Full article link:',
-            '🔗 Learn more at:'
-          ];
-          const commentPrefix = commentPrefixes[Math.floor(Math.random() * commentPrefixes.length)];
-          await this.facebookService.ztteam_publishComment(
-            page.fb_page_id,
-            response.id,
-            `${commentPrefix} ${trackingLink}`
-          );
-        } catch (e: any) {
-          this.logger.error(`Failed to post comment for reel ${reel.id}: ${e.message}`);
-        }
-      }
+      /**
+       * ZTTeam: Tuân thủ quy tắc bảo vệ phân phối tự nhiên (Organic Reach):
+       * Tuyệt đối không đăng comment chứa link ngay lập tức khi vừa xuất bản bài viết.
+       * Comment kèm link chỉ được phép xuất hiện sau 10 tiếng.
+       */
+
 
       await this.prisma.ztteam_reels.update({
         where: { id: reel.id },
@@ -672,26 +659,26 @@ export class ZTTeamPublisherCron {
   }
 
   /**
-   * Xử lý quy trình comment tự động 2 bước sau khi đăng bài:
-   * Bước 1: Sau 60 phút từ posted_at -> Đăng bình luận mồi:
-   * "...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇"
-   * Bước 2: Tương tác thông minh (Smart Engagement):
-   * - Trong vòng 2 tiếng (120 phút): Quét mỗi 2 phút, nếu có bất kỳ độc giả thật nào comment -> Reply ngay Part 2 + link cho họ (gửi chuông thông báo).
-   * - Nếu sau 2 tiếng vẫn 0 có ai comment: Kích hoạt Fallback tự động reply vào comment mồi của Page để đảm bảo luôn có link bài viết.
+   * ZTTeam: Quy trình tự động đăng bình luận đoạn nối tiếp (Part 2) sau 2 tiếng:
+   * - Sau đúng 2 tiếng (120 phút) kể từ khi bài viết được xuất bản lên Facebook:
+   * - Hệ thống tự động lấy nội dung Part 2 (đoạn nối tiếp câu chuyện) từ img.ai_first_comment.
+   * - Đăng 1 bình luận duy nhất dưới bài viết: 100% văn bản thuần túy, TUYỆT ĐỐI KHÔNG CÓ LINK WEBSITE.
+   * - Không còn bình luận mồi "YES", không còn link ra ngoài, tối ưu 100% Organic Reach tự nhiên.
    */
   async ztteam_handleDelayedComments() {
     try {
       const now = new Date();
 
-      /** Bước 1: Quét các bài viết đăng sau 60 phút nhưng chưa đăng comment mồi (comment_step = 0) */
-      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const step0Images = await this.prisma.ztteam_images.findMany({
+      /** Quét các bài viết đã đăng tối thiểu 2 tiếng trước nhưng chưa đăng bình luận Part 2 (comment_step = 0) */
+      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+      const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+
+      const pendingImages = await this.prisma.ztteam_images.findMany({
         where: {
           is_posted: true,
           fb_post_id: { not: null },
           comment_step: 0,
-          posted_at: { gte: oneDayAgo, lte: oneHourAgo }
+          posted_at: { gte: threeDaysAgo, lte: twoHoursAgo }, /** BẮT BUỘC ĐÃ ĐỦ 2 TIẾNG */
         },
         include: {
           page: {
@@ -701,224 +688,68 @@ export class ZTTeamPublisherCron {
         take: 10
       });
 
-      for (const img of step0Images) {
+      for (const img of pendingImages) {
         if (!img.page?.fb_page_id || !img.fb_post_id) continue;
 
-        /** Kiểm tra giãn cách thời gian an toàn nếu đã từng thử thất bại trước đó */
+        /** Kiểm tra giãn cách thời gian an toàn nếu từng thử thất bại trước đó */
         if (img.post_retry_count > 0) {
           const elapsedMs = now.getTime() - new Date(img.updated_at).getTime();
-          /** Lần 1 thất bại -> Chờ ít nhất 5 phút mới thử lần 2. Lần 2 thất bại -> Chờ ít nhất 10 phút mới thử lần 3. */
           const requiredWaitMs = img.post_retry_count === 1 ? 5 * 60 * 1000 : 10 * 60 * 1000;
           if (elapsedMs < requiredWaitMs) {
-            const remainingMins = Math.ceil((requiredWaitMs - elapsedMs) / 60000);
-            this.logger.log(`[Auto-Comment Step 1] Delay backoff active for image ${img.id} (Attempt ${img.post_retry_count}/3). Waiting ${remainingMins}m before next attempt...`);
             continue;
           }
         }
 
         try {
-          const hookText = ztteam_getRandomHookComment(img.id);
-          const res = await this.facebookService.ztteam_publishComment(
+          /** Chuẩn bị nội dung bình luận Part 2 nối tiếp */
+          let part2Text = img.ai_first_comment || '';
+
+          /** Làm sạch triệt để: Gỡ bỏ mọi câu CTA hoặc URL cũ nếu có trong database */
+          part2Text = part2Text
+            .replace(/👉\s*FULL STORY.*$/is, '')
+            .replace(/https?:\/\/[^\s]+/gi, '')
+            .trim();
+
+          /** Nếu bài viết không có part 2 (quá ngắn), đánh dấu hoàn tất để không comment bậy bạ */
+          if (!part2Text || part2Text.length < 20) {
+            this.logger.log(`[Auto-Comment Part 2] Image ${img.id} has no valid continuation text. Marking complete.`);
+            await this.prisma.ztteam_images.update({
+              where: { id: img.id },
+              data: { comment_step: 2, post_retry_count: 0 }
+            });
+            continue;
+          }
+
+          /** Đăng bình luận Part 2 trực tiếp dưới bài đăng Facebook */
+          await this.facebookService.ztteam_publishComment(
             img.page.fb_page_id,
             img.fb_post_id,
-            hookText
+            part2Text
           );
-
-          const hookCommentId = typeof res === 'object' && res?.id ? String(res.id) : (typeof res === 'string' ? res : null);
 
           await this.prisma.ztteam_images.update({
             where: { id: img.id },
             data: {
-              comment_step: 1,
-              hook_comment_id: hookCommentId,
-              hook_comment_at: new Date(),
-              post_retry_count: 0, /** Reset lại về 0 khi thành công */
+              comment_step: 2, /** Hoàn tất quy trình bình luận */
+              post_retry_count: 0,
             }
           });
 
-          this.logger.log(`[Auto-Comment Step 1] Posted YES hook comment for image ${img.id} (Post ${img.fb_post_id}, Comment ID: ${hookCommentId})`);
+          this.logger.log(`[Auto-Comment Part 2 - 2h] Successfully posted continuation comment for image ${img.id} on page ${img.page.name} (Post: ${img.fb_post_id})`);
         } catch (err: any) {
           const extractedError = ztteam_extractErrorMessage(err);
           const currentRetries = (img.post_retry_count || 0) + 1;
-          this.logger.error(`[Auto-Comment Step 1] Failed for image ${img.id} (Attempt ${currentRetries}/3): ${extractedError}`);
-
-          if (currentRetries < 3) {
-            /** Tự động giãn cách thời gian để thử lại ở chu kỳ tiếp theo, CHƯA báo Telegram */
-            await this.prisma.ztteam_images.update({
-              where: { id: img.id },
-              data: {
-                post_retry_count: currentRetries,
-                error_log: `Lần thử ${currentRetries}/3 thất bại: ${extractedError}`,
-              }
-            }).catch(() => { });
-            this.logger.log(`[Auto-Comment Step 1] Image ${img.id} scheduled for safe backoff retry ${currentRetries + 1}/3 after ${currentRetries === 1 ? '5' : '10'} minutes.`);
-          } else {
-            /** Sau 3 lần thử thất bại: Đánh dấu comment_step = 2 để kết thúc và báo Telegram */
-            await this.prisma.ztteam_images.update({
-              where: { id: img.id },
-              data: {
-                comment_step: 2,
-                post_retry_count: currentRetries,
-                error_log: `Lỗi comment mồi sau 3 lần thử (giãn cách an toàn 5-10 phút): ${extractedError}`,
-              }
-            }).catch(() => { });
-
-            /** ZTTeam: Bắn thông báo cảnh báo lỗi bình luận Step 1 về Telegram */
-            let ownerEmail = 'N/A';
-            if (img.page?.fb_account?.owner_user_id) {
-              const u = await this.prisma.ztteam_users.findUnique({ where: { id: img.page.fb_account.owner_user_id }, select: { email: true } });
-              if (u) ownerEmail = u.email;
-            }
-
-            const alertMsg = this.telegramService.ztteam_formatAlert({
-              systemName: 'Tự Động Bình Luận (Auto-Comment)',
-              fanpageName: img.page?.name || 'Không rõ',
-              postTitle: img.wp_post_title || 'Bài viết ảnh 2K',
-              step: 'Bước 1: Đăng bình luận mồi (YES Hook Comment) dưới bài viết',
-              rawError: extractedError,
-              nextAction: 'Đã thử lại 3 lần (giãn cách an toàn 5-10 phút) đều thất bại. Hệ thống kết thúc quy trình để bảo vệ Fanpage.',
-              memberEmail: ownerEmail,
-            });
-            this.telegramService.ztteam_sendMessage(alertMsg).catch(() => {});
-          }
-        }
-      }
-
-      /** Bước 2: Quét các bài viết đang ở comment_step = 1 (Đã đăng comment mồi, chờ độc giả tương tác hoặc fallback sau 5 tiếng) */
-      const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-      const step1Images = await this.prisma.ztteam_images.findMany({
-        where: {
-          is_posted: true,
-          comment_step: 1,
-          hook_comment_id: { not: null },
-          hook_comment_at: { gte: threeDaysAgo }
-        },
-        include: {
-          page: {
-            include: { fb_account: true }
-          }
-        },
-        take: 10
-      });
-
-      for (const img of step1Images) {
-        if (!img.page?.fb_page_id || !img.hook_comment_id || !img.hook_comment_at) continue;
-
-        /** Kiểm tra giãn cách thời gian an toàn nếu từng thử thất bại ở Step 2 */
-        if (img.post_retry_count > 0) {
-          const elapsedMs = now.getTime() - new Date(img.updated_at).getTime();
-          const requiredWaitMs = img.post_retry_count === 1 ? 5 * 60 * 1000 : 10 * 60 * 1000;
-          if (elapsedMs < requiredWaitMs) {
-            continue;
-          }
-        }
-
-        try {
-          const hookAgeMs = now.getTime() - new Date(img.hook_comment_at).getTime();
-          const hookAgeMinutes = Math.floor(hookAgeMs / (60 * 1000));
-          const isExpired5Hours = hookAgeMinutes >= 300; /** Đủ 5 tiếng (300 phút) */
-
-          /** Chuẩn bị nội dung reply Part 2 + link bài viết */
-          let replyContent = img.ai_first_comment;
-          if (!replyContent || replyContent === 'NO_LINK') {
-            const utmMedium = this.ztteam_slugify(img.page?.fb_account?.name || 'account');
-            const utmCampaign = this.ztteam_slugify(img.page?.name || 'page');
-            const trackingLink = img.wp_post_url
-              ? `${img.wp_post_url}${img.wp_post_url.includes('?') ? '&' : '?'}utm_source=image&utm_medium=${utmMedium}&utm_campaign=${utmCampaign}`
-              : '';
-            replyContent = `👉 FULL STORY HERE 👇👇👇\n${trackingLink}`;
-          }
-
-          if (isExpired5Hours) {
-            /** KỊCH BẢN 1: Đã hết 5 tiếng mà không có ai comment -> Kích hoạt Fallback tự động reply vào chính comment mồi */
-            await this.facebookService.ztteam_publishComment(
-              img.page.fb_page_id,
-              img.hook_comment_id,
-              replyContent
-            );
-
-            await this.prisma.ztteam_images.update({
-              where: { id: img.id },
-              data: {
-                comment_step: 2,
-                post_retry_count: 0,
-              }
-            });
-
-            this.logger.log(`[Auto-Comment Step 2 - Fallback 5h] Replied Part 2 & Link for image ${img.id} to hook comment ${img.hook_comment_id} after ${hookAgeMinutes}m`);
-            continue;
-          }
-
-          /** KỊCH BẢN 2: Trong vòng 5 tiếng -> Quét mỗi 2 phút một lần để tìm tương tác từ độc giả thật */
-          if (hookAgeMinutes % 2 !== 0) {
-            /** Chưa đến chu kỳ 2 phút -> Bỏ qua tick này để tiết kiệm API */
-            continue;
-          }
-
-          /** Gọi Graph API lấy bình luận bài viết (Field expansion kèm reply lồng nhau) */
-          const comments = await this.facebookService.ztteam_getComments(
-            img.page.fb_page_id,
-            img.fb_post_id || img.hook_comment_id
-          );
-
-          /** Tìm bình luận từ độc giả thật (không phải do chính Fanpage tự comment) */
-          let targetCommentId: string | null = null;
-          let realCommenterName = '';
-
-          for (const comment of comments) {
-            /** Kiểm tra xem comment cấp 1 có phải của độc giả thật không */
-            if (comment.from?.id && comment.from.id !== img.page.fb_page_id && comment.id !== img.hook_comment_id) {
-              targetCommentId = comment.id;
-              realCommenterName = comment.from?.name || '';
-              break;
-            }
-
-            /** Kiểm tra các sub-comments (replies) lồng bên trong comment */
-            if (comment.comments?.data && Array.isArray(comment.comments.data)) {
-              for (const subComment of comment.comments.data) {
-                if (subComment.from?.id && subComment.from.id !== img.page.fb_page_id) {
-                  targetCommentId = subComment.id;
-                  realCommenterName = subComment.from?.name || '';
-                  break;
-                }
-              }
-            }
-
-            if (targetCommentId) break;
-          }
-
-          /** Nếu tìm thấy độc giả thật bình luận -> Reply ngay cho độc giả đó! */
-          if (targetCommentId) {
-            await this.facebookService.ztteam_publishComment(
-              img.page.fb_page_id,
-              targetCommentId,
-              replyContent
-            );
-
-            await this.prisma.ztteam_images.update({
-              where: { id: img.id },
-              data: {
-                comment_step: 2,
-                post_retry_count: 0,
-              }
-            });
-
-            this.logger.log(`[Auto-Comment Step 2 - Smart Engagement] Found real user (${realCommenterName}) on image ${img.id}! Replied Part 2 to comment ${targetCommentId}`);
-          }
-        } catch (err: any) {
-          const extractedError = ztteam_extractErrorMessage(err);
-          const currentRetries = (img.post_retry_count || 0) + 1;
-          this.logger.error(`[Auto-Comment Step 2] Failed for image ${img.id} (Attempt ${currentRetries}/3): ${extractedError}`);
+          this.logger.error(`[Auto-Comment Part 2] Failed for image ${img.id} (Attempt ${currentRetries}/3): ${extractedError}`);
 
           if (currentRetries < 3) {
             await this.prisma.ztteam_images.update({
               where: { id: img.id },
               data: {
                 post_retry_count: currentRetries,
-                error_log: `Lần thử Step 2 ${currentRetries}/3 thất bại: ${extractedError}`,
+                error_log: `Lần thử đăng Part 2 ${currentRetries}/3 thất bại: ${extractedError}`,
               }
             }).catch(() => { });
-            this.logger.log(`[Auto-Comment Step 2] Image ${img.id} scheduled for safe backoff retry ${currentRetries + 1}/3 after ${currentRetries === 1 ? '5' : '10'} minutes.`);
+            this.logger.log(`[Auto-Comment Part 2] Image ${img.id} scheduled for safe backoff retry ${currentRetries + 1}/3 after ${currentRetries === 1 ? '5' : '10'} minutes.`);
           } else {
             /** Sau 3 lần thử thất bại mới kết thúc và báo Telegram */
             await this.prisma.ztteam_images.update({
@@ -926,7 +757,7 @@ export class ZTTeamPublisherCron {
               data: {
                 comment_step: 2,
                 post_retry_count: currentRetries,
-                error_log: `Lỗi reply Part 2 sau 3 lần thử (giãn cách 5-10 phút): ${extractedError}`,
+                error_log: `Lỗi đăng Part 2 sau 3 lần thử (giãn cách 5-10 phút): ${extractedError}`,
               }
             }).catch(() => { });
 
@@ -940,7 +771,7 @@ export class ZTTeamPublisherCron {
               systemName: 'Tự Động Bình Luận (Auto-Comment)',
               fanpageName: img.page?.name || 'Không rõ',
               postTitle: img.wp_post_title || 'Bài viết ảnh 2K',
-              step: 'Bước 2: Trả lời bình luận độc giả (kèm Link bài viết Part 2)',
+              step: 'Đăng bình luận đoạn nối tiếp (Part 2) sau 2 tiếng',
               rawError: extractedError,
               nextAction: 'Đã thử lại 3 lần (giãn cách an toàn 5-10 phút) đều thất bại. Hệ thống đã kết thúc quy trình.',
               memberEmail: ownerEmail,
