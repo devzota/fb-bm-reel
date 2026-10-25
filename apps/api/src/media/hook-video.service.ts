@@ -283,7 +283,7 @@ export class ZTTeamHookVideoService {
    */
   async ztteam_renderHookVideo(
     imageId: string,
-    options?: { bgmFilename?: string; forceRegenHook?: boolean; videoEngine?: string }
+    options?: { bgmFilename?: string; forceRegenHook?: boolean; videoEngine?: string; forceRegenContent?: boolean }
   ): Promise<{ success: boolean; videoUrl?: string; error?: string }> {
     this.logger.log(`===== START HOOK/TEXT STORY VIDEO RENDER: image=${imageId} =====`);
 
@@ -374,22 +374,62 @@ export class ZTTeamHookVideoService {
 
         /** Lấy toàn bộ cốt truyện từ ai_script hoặc kết hợp caption + first_comment */
         const rawStory = imageRecord.ai_script || (imageRecord.ai_caption + '\n\n' + (imageRecord.ai_first_comment || '')) || imageRecord.wp_post_title || '';
-        const storyData = await this.aiService.ztteam_generateTextStoryCardContent(
-          imageRecord.wp_post_title || 'Compelling Story',
-          rawStory
-        );
 
+        /** ZTTeam: Kiểm tra xem đã có kịch bản story_card_data.json lưu sẵn trong thư mục bài viết chưa */
+        const storyDataFile = path.join(ztteam_getImagesPath(imageId), 'story_card_data.json');
+        let storyData: { hookQuote: string; paragraphs: string[]; plainText: string } | null = null;
+
+        if (fs.existsSync(storyDataFile) && !options?.forceRegenContent) {
+          try {
+            storyData = JSON.parse(fs.readFileSync(storyDataFile, 'utf-8'));
+            this.logger.log(`[Text Story Reel] Tái sử dụng kịch bản đã lưu sẵn cho bài viết ${imageId} (Không cần gọi lại Gemini API)`);
+          } catch (readErr: any) {
+            storyData = null;
+          }
+        }
+
+        if (!storyData || !storyData.paragraphs || storyData.paragraphs.length === 0) {
+          this.logger.log(`[Text Story Reel] Gọi Gemini API tạo kịch bản mới cho bài viết ${imageId}`);
+          storyData = await this.aiService.ztteam_generateTextStoryCardContent(
+            imageRecord.wp_post_title || 'Compelling Story',
+            rawStory
+          );
+          try {
+            fs.writeFileSync(storyDataFile, JSON.stringify(storyData, null, 2), 'utf-8');
+          } catch (writeErr: any) {
+            this.logger.warn(`Không thể ghi file story_card_data.json: ${writeErr.message}`);
+          }
+        }
+
+        /** ZTTeam: Cân chỉnh kích thước chữ động (Fluid Typography) theo độ dài nội dung để luôn lấp đầy 90-95% thẻ */
         const wordCount = storyData.plainText.trim().split(/\s+/).length;
-        let fontSize = 36;
+        let hookFontSize = 46;
+        let fontSize = 38;
         let lineHeight = 1.34;
-        let pGap = 16;
+        let pGap = 18;
 
-        if (wordCount < 180) {
-          fontSize = 38;
+        if (wordCount < 150) {
+          /** Cực ngắn: Tăng mạnh kích thước chữ để lấp đầy thẻ và siêu dễ đọc */
+          hookFontSize = 54;
+          fontSize = 46;
+          lineHeight = 1.40;
+          pGap = 26;
+        } else if (wordCount < 185) {
+          /** Ngắn - Vừa: Tăng chữ to rõ ràng */
+          hookFontSize = 50;
+          fontSize = 42;
           lineHeight = 1.36;
+          pGap = 22;
+        } else if (wordCount <= 225) {
+          /** Chuẩn (185 - 225 từ) */
+          hookFontSize = 46;
+          fontSize = 38;
+          lineHeight = 1.32;
           pGap = 18;
-        } else if (wordCount > 230) {
-          fontSize = 33.5;
+        } else {
+          /** Dài (> 225 từ): Thu gọn vừa vặn không tràn */
+          hookFontSize = 42;
+          fontSize = 34;
           lineHeight = 1.28;
           pGap = 14;
         }
@@ -590,11 +630,11 @@ export class ZTTeamHookVideoService {
     /** TIÊU ĐỀ MỞ MÀN CÂU CHUYỆN (VÀNG KIM NỔI BẬT) */
     .story-hook {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 44px;
+      font-size: ${hookFontSize}px;
       font-weight: 700;
       color: ${theme.hookColor};
       line-height: 1.20;
-      margin-bottom: 18px;
+      margin-bottom: 20px;
       letter-spacing: -0.2px;
       text-shadow: 0 0 16px rgba(245, 158, 11, 0.4);
     }
