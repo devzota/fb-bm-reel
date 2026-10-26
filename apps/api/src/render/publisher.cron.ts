@@ -124,8 +124,13 @@ export class ZTTeamPublisherCron {
       for (const [pageId, page] of pagesMap.entries()) {
         const { auto_publish_enabled, schedule_mode, schedule_fixed_times, schedule_immediate_gap_minutes, post_format } = page;
 
-        /** Nếu Page đang tắt tự động đăng bài hoặc bị vô hiệu hóa thì bỏ qua */
-        if (auto_publish_enabled === false || page.is_active === false) {
+        /** ZTTeam: Nếu Page đang tắt tự động đăng bài, vô hiệu hóa, hoặc đang bị Meta yêu cầu Checkpoint xác minh danh tính thì bỏ qua tuyệt đối */
+        if (
+          auto_publish_enabled === false ||
+          page.is_active === false ||
+          page.token_status === 'checkpoint_required' ||
+          page.token_status === 'expired'
+        ) {
           continue;
         }
 
