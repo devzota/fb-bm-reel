@@ -476,16 +476,9 @@ export class ZTTeamHookVideoService {
           'frosted_glass',
         ];
 
-        let selectedStyle = options?.templateStyle;
-        if (!selectedStyle) {
-          /** Tự động luân phiên giữa 3 mẫu để các video đa dạng sinh động */
-          let hash = 0;
-          const keyStr = (imageId || '') + (pageKey || '');
-          for (let i = 0; i < keyStr.length; i++) {
-            hash = (hash << 5) - hash + keyStr.charCodeAt(i);
-            hash |= 0;
-          }
-          selectedStyle = availableStyles[Math.abs(hash) % availableStyles.length];
+        let selectedStyle = options?.templateStyle || (imageRecord.page?.default_reel_template_id as any);
+        if (!selectedStyle || !availableStyles.includes(selectedStyle)) {
+          selectedStyle = 'frosted_glass';
         }
 
         this.logger.log(`[Text Story Reel] Fanpage "${pageName}" sử dụng Style Template: ${selectedStyle}`);
