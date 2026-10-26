@@ -1857,7 +1857,7 @@ export class ZTTeamHookVideoService {
     .header-meta {
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 5px;
     }
 
     .page-name-row {
@@ -1885,11 +1885,12 @@ export class ZTTeamHookVideoService {
 
     .post-submeta {
       font-family: 'Montserrat', sans-serif;
-      font-size: 19px;
+      font-size: 22px;
       font-weight: 800;
-      color: #94a3b8;
-      letter-spacing: 1.5px;
+      color: #e2e8f0;
+      letter-spacing: 2px;
       text-transform: uppercase;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
     }
 
     .glass-card-wrapper {
