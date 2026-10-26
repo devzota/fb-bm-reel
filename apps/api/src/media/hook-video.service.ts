@@ -279,11 +279,17 @@ export class ZTTeamHookVideoService {
   ) { }
 
   /**
-   * ZTTeam: Render video Reel 10s siêu sắc nét từ hình ảnh Hook hoặc Text Story kính mờ Frosted Glass
+   * ZTTeam: Render video Reel 10s siêu sắc nét từ hình ảnh Hook hoặc Text Story (3 Style templates)
    */
   async ztteam_renderHookVideo(
     imageId: string,
-    options?: { bgmFilename?: string; forceRegenHook?: boolean; videoEngine?: string; forceRegenContent?: boolean }
+    options?: {
+      bgmFilename?: string;
+      forceRegenHook?: boolean;
+      videoEngine?: string;
+      forceRegenContent?: boolean;
+      templateStyle?: 'vintage_paper' | 'parchment_gold' | 'frosted_glass';
+    }
   ): Promise<{ success: boolean; videoUrl?: string; error?: string; message?: string }> {
     this.logger.log(`===== START HOOK/TEXT STORY VIDEO RENDER: image=${imageId} =====`);
 
@@ -450,297 +456,35 @@ export class ZTTeamHookVideoService {
           pGap = 14;
         }
 
-        const htmlContent = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,700&family=Montserrat:ital,wght@0,600;0,700;0,800&display=swap" rel="stylesheet">
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      width: 1080px;
-      height: 1920px;
-      background: #020509;
-      font-family: 'Barlow Condensed', sans-serif !important;
-      color: #ffffff;
-      overflow: hidden;
-      position: relative;
-    }
+        /** ZTTeam: Chọn Style template (vintage_paper / parchment_gold / frosted_glass) */
+        const availableStyles: ('vintage_paper' | 'parchment_gold' | 'frosted_glass')[] = [
+          'vintage_paper',
+          'parchment_gold',
+          'frosted_glass',
+        ];
 
-    /** NỀN TỐI SÂU DARK SEAMLESS ĐA LỚP GRADIENT */
-    .bg-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 1080px;
-      height: 1920px;
-      background: ${theme.bgGradient};
-      z-index: 1;
-    }
+        let selectedStyle = options?.templateStyle;
+        if (!selectedStyle) {
+          /** Tự động luân phiên giữa 3 mẫu để các video đa dạng sinh động */
+          let hash = 0;
+          const keyStr = (imageId || '') + (pageKey || '');
+          for (let i = 0; i < keyStr.length; i++) {
+            hash = (hash << 5) - hash + keyStr.charCodeAt(i);
+            hash |= 0;
+          }
+          selectedStyle = availableStyles[Math.abs(hash) % availableStyles.length];
+        }
 
-    /** QUẦNG SÁNG AURA 1 */
-    .aura-1 {
-      position: absolute;
-      top: 60px;
-      right: -80px;
-      width: 820px;
-      height: 820px;
-      background: radial-gradient(circle, ${theme.aura1} 0%, transparent 70%);
-      filter: blur(100px);
-      z-index: 2;
-      pointer-events: none;
-    }
+        this.logger.log(`[Text Story Reel] Fanpage "${pageName}" sử dụng Style Template: ${selectedStyle}`);
 
-    /** QUẦNG SÁNG AURA 2 */
-    .aura-2 {
-      position: absolute;
-      top: 600px;
-      left: -140px;
-      width: 800px;
-      height: 800px;
-      background: radial-gradient(circle, ${theme.aura2} 0%, transparent 70%);
-      filter: blur(95px);
-      z-index: 2;
-      pointer-events: none;
-    }
-
-    /** QUẦNG SÁNG AURA 3 */
-    .aura-3 {
-      position: absolute;
-      bottom: 80px;
-      right: -100px;
-      width: 840px;
-      height: 840px;
-      background: radial-gradient(circle, ${theme.aura3} 0%, transparent 70%);
-      filter: blur(105px);
-      z-index: 2;
-      pointer-events: none;
-    }
-
-    /** HỌA TIẾT HẠT SÂU CINEMATIC */
-    .noise-grid {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 1080px;
-      height: 1920px;
-      background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-      background-size: 30px 30px;
-      z-index: 3;
-      pointer-events: none;
-    }
-
-    /** CỤM FANPAGE HEADER NẰM TRỰC TIẾP TRÊN NỀN */
-    .external-header {
-      position: absolute;
-      top: 68px;
-      left: 60px;
-      width: 960px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      z-index: 10;
-    }
-
-    .avatar-wrapper {
-      position: relative;
-      width: 72px;
-      height: 72px;
-      flex-shrink: 0;
-    }
-
-    .page-avatar {
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      border: 2px solid ${theme.hookColor};
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65);
-      object-fit: cover;
-    }
-
-    .avatar-fallback {
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      border: 2px solid ${theme.hookColor};
-      background: linear-gradient(135deg, #0e3e4b 0%, #061622 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 28px;
-      font-weight: 800;
-      color: #ffffff;
-      font-family: 'Montserrat', sans-serif;
-    }
-
-    .header-meta {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .page-name-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    /** TÊN FANPAGE ĐƯỢC LÀM MỜ BLUR ĐÚNG CHUẨN VIRAL CENSOR */
-    .page-name-blurred {
-      font-family: 'Montserrat', sans-serif;
-      font-size: 27px;
-      font-weight: 800;
-      color: #ffffff;
-      letter-spacing: -0.3px;
-      line-height: 1.15;
-      filter: blur(5px);
-      user-select: none;
-    }
-
-    .verified-icon {
-      width: 20px;
-      height: 20px;
-      flex-shrink: 0;
-    }
-
-    .post-submeta {
-      font-family: 'Montserrat', sans-serif;
-      font-size: 18px;
-      font-weight: 500;
-      color: #94a3b8;
-      letter-spacing: -0.2px;
-    }
-
-    /** THẺ BÀI VIẾT KÍNH MỜ (FROSTED GLASS) CAO 1575px, ĐÁY CHỈ CHỪA ĐÚNG ~10% (190px) */
-    .glass-card-wrapper {
-      position: absolute;
-      top: 155px;
-      left: 60px;
-      width: 960px;
-      height: 1575px;
-      z-index: 10;
-    }
-
-    .glass-card {
-      width: 100%;
-      height: 100%;
-      background: ${theme.cardBg};
-      backdrop-filter: blur(36px);
-      -webkit-backdrop-filter: blur(36px);
-      border-radius: 36px;
-      border: ${theme.cardBorder};
-      box-shadow: ${theme.cardGlow}, inset 0 1px 2px rgba(255, 255, 255, 0.18);
-      padding: 40px 46px 34px 46px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    .card-top-content {
-      display: flex;
-      flex-direction: column;
-    }
-
-    /** TIÊU ĐỀ MỞ MÀN CÂU CHUYỆN (VÀNG KIM NỔI BẬT) */
-    .story-hook {
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: ${hookFontSize}px;
-      font-weight: 700;
-      color: ${theme.hookColor};
-      line-height: 1.20;
-      margin-bottom: 20px;
-      letter-spacing: -0.2px;
-      text-shadow: 0 0 16px rgba(245, 158, 11, 0.4);
-    }
-
-    /** THÂN BÀI VIẾT TYPOGRAPHY BARLOW CONDENSED LẤP KÍN CARD */
-    .story-body {
-      display: flex;
-      flex-direction: column;
-      gap: ${pGap}px;
-    }
-
-    .story-p {
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: ${fontSize}px;
-      font-weight: 600;
-      line-height: ${lineHeight};
-      color: ${theme.textColor};
-      letter-spacing: -0.15px;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.75);
-    }
-
-    /** TỪ KHÓA ĐẮT GIÁ HIGHLIGHT VÀNG KIM ÁNH SÁNG */
-    .hl {
-      color: ${theme.hlColor} !important;
-      font-weight: 700;
-      text-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
-    }
-
-    /** NÚT KÊU GỌI HÀNH ĐỘNG CLIFFHANGER */
-    .cta-row {
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      width: 100%;
-      padding-top: 12px;
-    }
-
-    .cta-text {
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 37px;
-      font-weight: 700;
-      color: ${theme.ctaColor};
-      text-shadow: 0 0 18px rgba(56, 189, 248, 0.7);
-      letter-spacing: 0.3px;
-    }
-  </style>
-</head>
-<body>
-  <div class="bg-canvas"></div>
-  <div class="aura-1"></div>
-  <div class="aura-2"></div>
-  <div class="aura-3"></div>
-  <div class="noise-grid"></div>
-
-  <!-- HEADER FANPAGE (VỚI TÊN FANPAGE ĐƯỢC LÀM MỜ BLUR NHƯ ẢNH MẪU VIRAL) -->
-  <div class="external-header">
-    <div class="avatar-wrapper">
-      ${pageAvatarDataUri 
-        ? `<img src="${pageAvatarDataUri}" class="page-avatar" />`
-        : `<div class="avatar-fallback">${pageName.substring(0, 2).toUpperCase()}</div>`
-      }
-    </div>
-    <div class="header-meta">
-      <div class="page-name-row">
-        <span class="page-name-blurred">${pageName}</span>
-        <svg class="verified-icon" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" fill="${theme.verifiedColor}"/>
-          <path d="M7.5 12L10.5 15L16.5 9" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <span class="post-submeta">4 hours ago • A Text Story • facebook.com</span>
-    </div>
-  </div>
-
-  <!-- THẺ BÀI VIẾT KÍNH MỜ FROSTED GLASS CAO 1575px - CHỈ TRỐNG ĐÚNG 10% Ở ĐÁY -->
-  <div class="glass-card-wrapper">
-    <div class="glass-card">
-      <div class="card-top-content">
-        <div class="story-hook">${storyData.hookQuote}</div>
-        <div class="story-body">
-          ${storyData.paragraphs.map(p => `<p class="story-p">${p}</p>`).join('\n          ')}
-        </div>
-      </div>
-      <div class="cta-row">
-        <div class="cta-text">Continue Reading...</div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
+        let htmlContent = '';
+        if (selectedStyle === 'vintage_paper') {
+          htmlContent = this.ztteam_buildVintagePaperHtml(storyData, pageAvatarDataUri, fontSize, lineHeight, pGap);
+        } else if (selectedStyle === 'parchment_gold') {
+          htmlContent = this.ztteam_buildParchmentGoldHtml(storyData, pageAvatarDataUri, fontSize, lineHeight, pGap);
+        } else {
+          htmlContent = this.ztteam_buildFrostedGlassHtml(storyData, pageAvatarDataUri, theme, pageName, hookFontSize, fontSize, lineHeight, pGap);
+        }
 
         browser = await puppeteer.launch({
           headless: true,
@@ -748,8 +492,11 @@ export class ZTTeamHookVideoService {
         });
         const page = await browser.newPage();
         await page.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
-        await page.setContent(htmlContent, { waitUntil: 'load' });
-        await page.evaluateHandle('document.fonts.ready');
+        await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
+        try {
+          await page.evaluateHandle('document.fonts.ready');
+        } catch (fontErr) { /** Bỏ qua */ }
+        await new Promise(r => setTimeout(r, 1200));
 
         const framePngPath = path.join(tempDir, 'text_story_frame.png');
         await page.screenshot({ path: framePngPath, omitBackground: false, type: 'png' });
@@ -1147,4 +894,668 @@ export class ZTTeamHookVideoService {
       return { success: false, error: ztteam_extractErrorMessage(err) };
     }
   }
+
+  /**
+   * ZTTeam: Mẫu 1 - Vintage Paper & Deep Crimson Highlight
+   * Giấy sách cổ điển, viền đôi ngoài, chữ Oswald đậm, trích dẫn đỏ thẫm Burgundy, nút Continue Reading
+   */
+  private ztteam_buildVintagePaperHtml(
+    storyData: { hookQuote: string; paragraphs: string[]; plainText: string },
+    pageAvatarDataUri: string,
+    fontSize: number,
+    lineHeight: number,
+    pGap: number
+  ): string {
+    const avatarHtml = pageAvatarDataUri
+      ? `<img src="${pageAvatarDataUri}" alt="Avatar" />`
+      : `<svg class="avatar-svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#d4c2aa"/><circle cx="50" cy="40" r="20" fill="#755a3d"/><circle cx="50" cy="85" r="32" fill="#755a3d"/></svg>`;
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 1080px;
+      height: 1920px;
+      background: #e4d8c7;
+      overflow: hidden;
+      position: relative;
+      font-family: 'Oswald', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    /** KHUNG VIỀN ĐÔI TRANG GIẤY CỔ ĐIỂN */
+    .outer-border {
+      position: absolute;
+      top: 28px;
+      left: 28px;
+      right: 28px;
+      bottom: 28px;
+      border: 2px solid rgba(175, 155, 135, 0.65);
+      border-radius: 40px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .outer-border-inner {
+      position: absolute;
+      top: 38px;
+      left: 38px;
+      right: 38px;
+      bottom: 38px;
+      border: 1px dashed rgba(175, 155, 135, 0.5);
+      border-radius: 34px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /** CARD NỘI DUNG GIẤY KEM SÁNG */
+    .content-card {
+      width: 960px;
+      height: 1720px;
+      background: #fbf8f2;
+      border-radius: 38px;
+      box-shadow: 0 25px 70px rgba(90, 70, 50, 0.18), 0 4px 16px rgba(90, 70, 50, 0.08);
+      padding: 55px 65px 45px 65px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      z-index: 5;
+      border: 1px solid rgba(220, 210, 195, 0.7);
+    }
+
+    /** HEADER PROFILE (CHỈ AVATAR BLUR + VỆT CHE TÊN ĐỎ THẪM) */
+    .header-bar {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      margin-bottom: 25px;
+    }
+    .avatar-wrapper {
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 3px solid #d8cbbe;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+      flex-shrink: 0;
+      position: relative;
+    }
+    .avatar-wrapper img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: blur(8px);
+      transform: scale(1.25);
+    }
+    .avatar-svg {
+      width: 100%;
+      height: 100%;
+      filter: blur(4px);
+    }
+    .censor-brush {
+      width: 360px;
+      height: 34px;
+      background: #731e25;
+      border-radius: 8px 16px 12px 18px;
+      transform: rotate(-0.5deg);
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.25);
+    }
+
+    /** NỘI DUNG CÂU CHUYỆN */
+    .story-body {
+      display: flex;
+      flex-direction: column;
+      gap: ${pGap}px;
+      color: #1a1918;
+      font-size: ${fontSize}px;
+      font-weight: 700;
+      line-height: ${lineHeight};
+      letter-spacing: -0.2px;
+    }
+    .story-paragraph {
+      margin: 0;
+    }
+    .highlight-red, .hl {
+      color: #8b1d20 !important;
+      font-weight: 700;
+    }
+
+    /** NÚT CTA CONTINUE READING (CĂN GIỮA DƯỚI ĐÁY) */
+    .cta-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-top: 15px;
+      padding-top: 10px;
+    }
+    .cta-pill {
+      background: #ded4c5;
+      border: 2px solid #c2b49f;
+      border-radius: 9999px;
+      padding: 16px 56px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 27px;
+      font-weight: 800;
+      color: #2b251f;
+      box-shadow: 0 4px 12px rgba(60, 45, 30, 0.12);
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <div class="outer-border"></div>
+  <div class="outer-border-inner"></div>
+
+  <div class="content-card">
+    <div class="main-content-area">
+      <div class="header-bar">
+        <div class="avatar-wrapper">
+          ${avatarHtml}
+        </div>
+        <div class="censor-brush"></div>
+      </div>
+
+      <div class="story-body">
+        ${storyData.hookQuote ? `<p class="story-paragraph highlight-red">${storyData.hookQuote}</p>` : ''}
+        ${storyData.paragraphs.map(p => `<p class="story-paragraph">${p}</p>`).join('\n        ')}
+      </div>
+    </div>
+
+    <div class="cta-container">
+      <div class="cta-pill">Continue Reading...</div>
+    </div>
+  </div>
+</body>
+</html>`;
+  }
+
+  /**
+   * ZTTeam: Mẫu 2 - Parchment & Mustard Gold Accent
+   * Giấy da dê vàng Sepia, chữ Montserrat đậm, trích dẫn vàng mù tạt, huy hiệu 1/Full, nút Continue Read More lớn
+   */
+  private ztteam_buildParchmentGoldHtml(
+    storyData: { hookQuote: string; paragraphs: string[]; plainText: string },
+    pageAvatarDataUri: string,
+    fontSize: number,
+    lineHeight: number,
+    pGap: number
+  ): string {
+    const avatarHtml = pageAvatarDataUri
+      ? `<img src="${pageAvatarDataUri}" alt="Avatar" />`
+      : `<svg class="avatar-svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#d4c2aa"/><circle cx="50" cy="40" r="20" fill="#755a3d"/><circle cx="50" cy="85" r="32" fill="#755a3d"/></svg>`;
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 1080px;
+      height: 1920px;
+      background: linear-gradient(180deg, #9a7647 0%, #72532f 50%, #463118 100%);
+      overflow: hidden;
+      position: relative;
+      font-family: 'Montserrat', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    /** CARD GIẤY DA DÊ VÀNG HỔ PHÁCH PARCHMENT */
+    .content-card {
+      width: 960px;
+      height: 1720px;
+      background: #f4ecda;
+      border-radius: 40px;
+      box-shadow: 0 30px 80px rgba(35, 20, 5, 0.4), 0 8px 24px rgba(35, 20, 5, 0.15);
+      padding: 55px 65px 45px 65px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      z-index: 5;
+      border: 1px solid rgba(200, 180, 150, 0.5);
+    }
+
+    /** HEADER PROFILE (CHỈ AVATAR BLUR + HỘP CHE TÊN XÁM + BADGE 1/Full) */
+    .header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 25px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .avatar-wrapper {
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 2px solid #c9baa8;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      flex-shrink: 0;
+      position: relative;
+    }
+    .avatar-wrapper img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: blur(8px);
+      transform: scale(1.25);
+    }
+    .avatar-svg {
+      width: 100%;
+      height: 100%;
+      filter: blur(4px);
+    }
+    .censor-box {
+      width: 280px;
+      height: 32px;
+      background: #7c7263;
+      border-radius: 6px;
+    }
+
+    .badge-full {
+      border: 2px solid #a67c26;
+      border-radius: 9999px;
+      padding: 6px 20px;
+      font-size: 24px;
+      font-weight: 800;
+      color: #a67c26;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /** NỘI DUNG CÂU CHUYỆN */
+    .story-body {
+      display: flex;
+      flex-direction: column;
+      gap: ${pGap}px;
+      color: #141311;
+      font-size: ${fontSize}px;
+      font-weight: 800;
+      line-height: ${lineHeight};
+      letter-spacing: -0.3px;
+    }
+    .story-paragraph {
+      margin: 0;
+    }
+    .highlight-gold, .hl {
+      color: #a6791e !important;
+      font-weight: 900;
+    }
+
+    /** KHU VỰC BOTTOM: HOOK QUESTION + NÚT LỚN */
+    .bottom-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      margin-top: 20px;
+      padding-top: 10px;
+    }
+    .question-hook {
+      font-size: 35px;
+      font-weight: 900;
+      color: #141311;
+      text-align: center;
+    }
+    .btn-read-more {
+      width: 100%;
+      max-width: 720px;
+      background: #9e741a;
+      border-radius: 9999px;
+      padding: 22px 40px;
+      font-size: 35px;
+      font-weight: 800;
+      color: #ffffff;
+      text-align: center;
+      box-shadow: 0 12px 28px rgba(158, 116, 26, 0.42);
+      letter-spacing: 0.2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="content-card">
+    <div class="main-content-area">
+      <div class="header-bar">
+        <div class="header-left">
+          <div class="avatar-wrapper">
+            ${avatarHtml}
+          </div>
+          <div class="censor-box"></div>
+        </div>
+        <div class="badge-full">1/Full</div>
+      </div>
+
+      <div class="story-body">
+        ${storyData.hookQuote ? `<p class="story-paragraph highlight-gold">${storyData.hookQuote}</p>` : ''}
+        ${storyData.paragraphs.map(p => `<p class="story-paragraph">${p}</p>`).join('\n        ')}
+      </div>
+    </div>
+
+    <div class="bottom-section">
+      <div class="question-hook">What do you think is inside?</div>
+      <div class="btn-read-more">Continue Read More...</div>
+    </div>
+  </div>
+</body>
+</html>`;
+  }
+
+  /**
+   * ZTTeam: Mẫu 3 - Frosted Glass Card (Kính mờ hiện đại & Aurora Glow)
+   */
+  private ztteam_buildFrostedGlassHtml(
+    storyData: { hookQuote: string; paragraphs: string[]; plainText: string },
+    pageAvatarDataUri: string,
+    theme: any,
+    pageName: string,
+    hookFontSize: number,
+    fontSize: number,
+    lineHeight: number,
+    pGap: number
+  ): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700&family=Montserrat:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 1080px;
+      height: 1920px;
+      background: #010a0e;
+      overflow: hidden;
+      position: relative;
+      font-family: 'Barlow Condensed', sans-serif;
+    }
+
+    .bg-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1920px;
+      background: ${theme.bgGradient};
+      z-index: 1;
+    }
+
+    .aura-1 {
+      position: absolute;
+      width: 820px;
+      height: 820px;
+      border-radius: 50%;
+      background: ${theme.aura1};
+      filter: blur(140px);
+      top: 80px;
+      left: -200px;
+      opacity: 0.65;
+      z-index: 2;
+    }
+
+    .aura-2 {
+      position: absolute;
+      width: 880px;
+      height: 880px;
+      border-radius: 50%;
+      background: ${theme.aura2};
+      filter: blur(150px);
+      bottom: 250px;
+      right: -240px;
+      opacity: 0.65;
+      z-index: 2;
+    }
+
+    .aura-3 {
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      background: ${theme.accentGlow};
+      filter: blur(110px);
+      top: 45%;
+      left: 25%;
+      opacity: 0.35;
+      z-index: 2;
+    }
+
+    .noise-grid {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1920px;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 32px 32px;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .external-header {
+      position: absolute;
+      top: 68px;
+      left: 60px;
+      width: 960px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      z-index: 10;
+    }
+
+    .avatar-wrapper {
+      position: relative;
+      width: 72px;
+      height: 72px;
+      flex-shrink: 0;
+    }
+
+    .page-avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 2px solid ${theme.hookColor};
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65);
+      object-fit: cover;
+    }
+
+    .avatar-fallback {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 2px solid ${theme.hookColor};
+      background: linear-gradient(135deg, #0e3e4b 0%, #061622 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 800;
+      color: #ffffff;
+      font-family: 'Montserrat', sans-serif;
+    }
+
+    .header-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .page-name-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .page-name-blurred {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 27px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.3px;
+      line-height: 1.15;
+      filter: blur(5px);
+      user-select: none;
+    }
+
+    .verified-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .post-submeta {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 18px;
+      font-weight: 500;
+      color: #94a3b8;
+      letter-spacing: -0.2px;
+    }
+
+    .glass-card-wrapper {
+      position: absolute;
+      top: 155px;
+      left: 60px;
+      width: 960px;
+      height: 1575px;
+      z-index: 10;
+    }
+
+    .glass-card {
+      width: 100%;
+      height: 100%;
+      background: ${theme.cardBg};
+      backdrop-filter: blur(36px);
+      -webkit-backdrop-filter: blur(36px);
+      border-radius: 36px;
+      border: ${theme.cardBorder};
+      box-shadow: ${theme.cardGlow}, inset 0 1px 2px rgba(255, 255, 255, 0.18);
+      padding: 40px 46px 34px 46px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .card-top-content {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .story-hook {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: ${hookFontSize}px;
+      font-weight: 700;
+      color: ${theme.hookColor};
+      line-height: 1.20;
+      margin-bottom: 20px;
+      letter-spacing: -0.2px;
+      text-shadow: 0 0 16px rgba(245, 158, 11, 0.4);
+    }
+
+    .story-body {
+      display: flex;
+      flex-direction: column;
+      gap: ${pGap}px;
+    }
+
+    .story-p {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: ${fontSize}px;
+      font-weight: 600;
+      line-height: ${lineHeight};
+      color: ${theme.textColor};
+      letter-spacing: -0.15px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.75);
+    }
+
+    .hl {
+      color: ${theme.hlColor} !important;
+      font-weight: 700;
+      text-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
+    }
+
+    .cta-row {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      width: 100%;
+      padding-top: 12px;
+    }
+
+    .cta-text {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 37px;
+      font-weight: 700;
+      color: ${theme.ctaColor};
+      text-shadow: 0 0 18px rgba(56, 189, 248, 0.7);
+      letter-spacing: 0.3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-canvas"></div>
+  <div class="aura-1"></div>
+  <div class="aura-2"></div>
+  <div class="aura-3"></div>
+  <div class="noise-grid"></div>
+
+  <div class="external-header">
+    <div class="avatar-wrapper">
+      ${pageAvatarDataUri 
+        ? `<img src="${pageAvatarDataUri}" class="page-avatar" />`
+        : `<div class="avatar-fallback">${pageName.substring(0, 2).toUpperCase()}</div>`
+      }
+    </div>
+    <div class="header-meta">
+      <div class="page-name-row">
+        <span class="page-name-blurred">${pageName}</span>
+        <svg class="verified-icon" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" fill="${theme.verifiedColor}"/>
+          <path d="M7.5 12L10.5 15L16.5 9" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <span class="post-submeta">4 hours ago • A Text Story • facebook.com</span>
+    </div>
+  </div>
+
+  <div class="glass-card-wrapper">
+    <div class="glass-card">
+      <div class="card-top-content">
+        <div class="story-hook">${storyData.hookQuote}</div>
+        <div class="story-body">
+          ${storyData.paragraphs.map(p => `<p class="story-p">${p}</p>`).join('\n          ')}
+        </div>
+      </div>
+      <div class="cta-row">
+        <div class="cta-text">Continue Reading...</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+  }
 }
+

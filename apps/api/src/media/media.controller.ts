@@ -75,13 +75,20 @@ export class ZTTeamMediaController {
   @Post('hook-render/:imageId')
   async ztteam_triggerHookRender(
     @Param('imageId') imageId: string,
-    @Body() body: { bgm?: string; forceRegenHook?: boolean; videoEngine?: string; forceRegenContent?: boolean }
+    @Body() body: {
+      bgm?: string;
+      forceRegenHook?: boolean;
+      videoEngine?: string;
+      forceRegenContent?: boolean;
+      templateStyle?: 'vintage_paper' | 'parchment_gold' | 'frosted_glass';
+    }
   ) {
     const result = await this.hookVideoService.ztteam_renderHookVideo(imageId, {
       bgmFilename: body?.bgm,
       forceRegenHook: body?.forceRegenHook,
       videoEngine: body?.videoEngine,
       forceRegenContent: body?.forceRegenContent,
+      templateStyle: body?.templateStyle,
     });
     return result;
   }
