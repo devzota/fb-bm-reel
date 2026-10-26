@@ -103,7 +103,13 @@ export class ZTTeamRenderCron implements OnApplicationBootstrap {
 
       for (const img of pendingImages) {
         try {
-          const res = await this.hookVideoService.ztteam_renderHookVideo(img.id);
+          /** ZTTeam: Đánh dấu PROCESSING trước để lần quét tiếp theo không bao giờ chọn trùng */
+          await this.prisma.ztteam_images.update({
+            where: { id: img.id },
+            data: { video_status: 'PROCESSING' },
+          });
+
+          const res = await this.hookVideoService.ztteam_renderHookVideo(img.id, { force: true });
           if (res.success) {
             this.logger.log(`[Auto Hook Video Worker] Render thành công video cho bài ${img.id} (Page: ${img.page?.name || 'Manual Studio'}): ${res.videoUrl}`);
           } else {

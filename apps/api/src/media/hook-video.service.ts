@@ -289,6 +289,7 @@ export class ZTTeamHookVideoService {
       videoEngine?: string;
       forceRegenContent?: boolean;
       templateStyle?: 'vintage_paper' | 'parchment_gold' | 'frosted_glass';
+      force?: boolean;
     }
   ): Promise<{ success: boolean; videoUrl?: string; error?: string; message?: string }> {
     this.logger.log(`===== START HOOK/TEXT STORY VIDEO RENDER: image=${imageId} =====`);
@@ -324,12 +325,24 @@ export class ZTTeamHookVideoService {
       }
     }
 
-    /** Cập nhật trạng thái đang xử lý */
+    /** ZTTeam: Kiểm tra nếu bài viết đang được render (PROCESSING) trong vòng 2 phút gần đây thì bỏ qua */
+    if (imageRecord.video_status === 'PROCESSING' && !options?.force) {
+      const isRecentlyProcessing = imageRecord.updated_at && (Date.now() - new Date(imageRecord.updated_at).getTime() < 120000);
+      if (isRecentlyProcessing) {
+        this.logger.warn(`Bài viết ${imageId} đang trong quá trình render (PROCESSING). Bỏ qua để tránh xung đột.`);
+        return {
+          success: false,
+          message: 'Bài viết đang được xử lý tạo video bởi một tiến trình khác.',
+        };
+      }
+    }
+
+    /** Cập nhật trạng thái đang xử lý PROCESSING */
     await this.prisma.ztteam_images.update({
       where: { id: imageId },
-      data: { video_status: 'PENDING', error_log: null },
+      data: { video_status: 'PROCESSING', error_log: null },
     });
-    this.eventEmitter.emit('image.updated', { id: imageId, video_status: 'PENDING' });
+    this.eventEmitter.emit('image.updated', { id: imageId, video_status: 'PROCESSING' });
 
     const tempDir = path.join(ztteam_getImagesPath(imageId), 'temp_hook_render');
     if (!fs.existsSync(tempDir)) {
@@ -534,13 +547,14 @@ export class ZTTeamHookVideoService {
         }
         await new Promise(r => setTimeout(r, 400));
 
-        const framePngPath = path.join(tempDir, 'text_story_frame.png');
+        const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const framePngPath = path.join(tempDir, `frame_${uniqueSuffix}.png`);
         await page.screenshot({ path: framePngPath, omitBackground: false, type: 'png' });
         await browser.close();
         browser = null;
 
         if (!fs.existsSync(framePngPath)) {
-          throw new Error('Lỗi Puppeteer: File text_story_frame.png không được tạo thành công.');
+          throw new Error('Lỗi Puppeteer: File text_story frame không được tạo thành công.');
         }
 
         const preferredBgm = options?.bgmFilename || imageRecord.page?.default_bgm || 'kiss_of_spring.mp4';
@@ -826,13 +840,14 @@ export class ZTTeamHookVideoService {
       await page.setContent(htmlContent, { waitUntil: 'load' });
       await page.evaluateHandle('document.fonts.ready');
 
-      const overlayPngPath = path.join(tempDir, 'frame_overlay.png');
+      const uniqueOverlaySuffix = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const overlayPngPath = path.join(tempDir, `overlay_${uniqueOverlaySuffix}.png`);
       await page.screenshot({ path: overlayPngPath, omitBackground: true, type: 'png' });
       await browser.close();
       browser = null;
 
       if (!fs.existsSync(overlayPngPath)) {
-        throw new Error('Lỗi Puppeteer: File frame_overlay.png không được tạo thành công.');
+        throw new Error('Lỗi Puppeteer: File frame overlay không được tạo thành công.');
       }
 
       /** 6. Lấy file nhạc nền BGM từ thư viện */
