@@ -80,7 +80,7 @@ export class ZTTeamMediaController {
       forceRegenHook?: boolean;
       videoEngine?: string;
       forceRegenContent?: boolean;
-      templateStyle?: 'vintage_paper' | 'parchment_gold' | 'frosted_glass';
+      templateStyle?: 'vintage_paper' | 'parchment_gold' | 'botanical_sage' | 'frosted_glass';
       force?: boolean;
     }
   ) {

@@ -288,7 +288,7 @@ export class ZTTeamHookVideoService {
       forceRegenHook?: boolean;
       videoEngine?: string;
       forceRegenContent?: boolean;
-      templateStyle?: 'vintage_paper' | 'parchment_gold' | 'frosted_glass';
+      templateStyle?: 'vintage_paper' | 'parchment_gold' | 'botanical_sage' | 'frosted_glass';
       force?: boolean;
     }
   ): Promise<{ success: boolean; videoUrl?: string; error?: string; message?: string }> {
@@ -469,10 +469,11 @@ export class ZTTeamHookVideoService {
           pGap = 14;
         }
 
-        /** ZTTeam: Chọn Style template (vintage_paper / parchment_gold / frosted_glass) */
-        const availableStyles: ('vintage_paper' | 'parchment_gold' | 'frosted_glass')[] = [
+        /** ZTTeam: Chọn Style template (vintage_paper / parchment_gold / botanical_sage / frosted_glass) */
+        const availableStyles: ('vintage_paper' | 'parchment_gold' | 'botanical_sage' | 'frosted_glass')[] = [
           'vintage_paper',
           'parchment_gold',
+          'botanical_sage',
           'frosted_glass',
         ];
 
@@ -488,6 +489,8 @@ export class ZTTeamHookVideoService {
           htmlContent = this.ztteam_buildVintagePaperHtml(storyData, pageAvatarDataUri, fontSize, lineHeight, pGap);
         } else if (selectedStyle === 'parchment_gold') {
           htmlContent = this.ztteam_buildParchmentGoldHtml(storyData, pageAvatarDataUri, fontSize, lineHeight, pGap);
+        } else if (selectedStyle === 'botanical_sage') {
+          htmlContent = this.ztteam_buildBotanicalSageHtml(storyData, pageAvatarDataUri, fontSize, lineHeight, pGap);
         } else {
           htmlContent = this.ztteam_buildFrostedGlassHtml(storyData, pageAvatarDataUri, theme, pageName, hookFontSize, fontSize, lineHeight, pGap);
         }
@@ -1355,7 +1358,318 @@ export class ZTTeamHookVideoService {
   }
 
   /**
-   * ZTTeam: Mẫu 3 - Frosted Glass Card (Kính mờ hiện đại & Aurora Glow)
+   * ZTTeam: Mẫu 3 - Botanical Sage & Frosted Glassmorphism (Xanh xô thơm tự nhiên, Thẻ kính mờ ngọc trai)
+   * Nền lá cây nghệ thuật, thẻ kính mờ trắng ngọc trai, avatar làm mờ blur 8px, chữ đen than điểm nhấn xanh ngọc lục bảo đậm #047857
+   */
+  private ztteam_buildBotanicalSageHtml(
+    storyData: { hookQuote: string; paragraphs: string[]; plainText: string },
+    pageAvatarDataUri: string,
+    fontSize: number,
+    lineHeight: number,
+    pGap: number
+  ): string {
+    const avatarHtml = pageAvatarDataUri
+      ? `<img src="${pageAvatarDataUri}" alt="Avatar" />`
+      : `<svg class="avatar-svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#a3c1ad"/><circle cx="50" cy="40" r="20" fill="#2d523b"/><circle cx="50" cy="85" r="32" fill="#2d523b"/></svg>`;
+
+    /** ZTTeam: Fluid typography tối ưu cho thẻ kính mờ ngọc trai */
+    const wordCount = storyData.plainText.trim().split(/\s+/).length;
+    let actualFontSize = 26;
+    let actualLineHeight = 1.30;
+    let actualPGap = 14;
+
+    if (wordCount < 130) {
+      actualFontSize = 32;
+      actualLineHeight = 1.34;
+      actualPGap = 18;
+    } else if (wordCount < 170) {
+      actualFontSize = 29;
+      actualLineHeight = 1.30;
+      actualPGap = 15;
+    } else if (wordCount <= 215) {
+      actualFontSize = 26;
+      actualLineHeight = 1.28;
+      actualPGap = 13;
+    } else {
+      actualFontSize = 23;
+      actualLineHeight = 1.25;
+      actualPGap = 10;
+    }
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 1080px;
+      height: 1920px;
+      background: linear-gradient(155deg, #a8c7b2 0%, #7da288 45%, #567e63 100%);
+      overflow: hidden;
+      position: relative;
+      font-family: 'Montserrat', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    /** HỌA TIẾT CÀNH LÁ XANH THIÊN NHIÊN VECTOR (BOTANICAL FOLIAGE DECORATION) */
+    .foliage-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1920px;
+      pointer-events: none;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    .foliage-svg {
+      position: absolute;
+      fill: none;
+    }
+
+    /** Cụm lá trên bên trái */
+    .foliage-tl {
+      top: -60px;
+      left: -80px;
+      width: 620px;
+      height: 680px;
+      opacity: 0.85;
+      transform: rotate(-8deg);
+      filter: drop-shadow(0 15px 35px rgba(20, 50, 30, 0.15));
+    }
+
+    /** Cụm lá dưới bên trái uốn lượn ôm viền thẻ */
+    .foliage-bl {
+      bottom: -80px;
+      left: -90px;
+      width: 720px;
+      height: 820px;
+      opacity: 0.90;
+      transform: rotate(6deg);
+      filter: drop-shadow(0 -15px 40px rgba(20, 50, 30, 0.18));
+    }
+
+    /** Cụm lá bên phải điểm xuyết */
+    .foliage-tr {
+      top: 80px;
+      right: -100px;
+      width: 480px;
+      height: 520px;
+      opacity: 0.70;
+      transform: rotate(20deg);
+      filter: drop-shadow(0 10px 25px rgba(20, 50, 30, 0.12));
+    }
+
+    .foliage-br {
+      bottom: 60px;
+      right: -80px;
+      width: 440px;
+      height: 480px;
+      opacity: 0.65;
+      transform: rotate(-15deg);
+      filter: drop-shadow(0 10px 25px rgba(20, 50, 30, 0.12));
+    }
+
+    /** Ánh sáng khuếch tán tự nhiên (Soft Natural Sunbeam Glow) */
+    .ambient-glow {
+      position: absolute;
+      top: 15%;
+      left: 20%;
+      width: 680px;
+      height: 680px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(180, 225, 195, 0.12) 60%, transparent 80%);
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /** THẺ KÍNH MỜ TRẮNG NGỌC TRAI FROSTED GLASS */
+    .content-card {
+      width: 960px;
+      height: 1720px;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+      border-radius: 46px;
+      border: 2.5px solid rgba(255, 255, 255, 0.95);
+      box-shadow: 0 32px 85px rgba(22, 55, 35, 0.24), 0 8px 24px rgba(22, 55, 35, 0.12);
+      padding: 50px 60px 42px 60px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      z-index: 10;
+    }
+
+    /** PROFILE HEADER (AVATAR BLUR 8PX + VỆT CHE TÊN + TÍCH XANH, BỎ URL VÀ GIỜ ĐĂNG) */
+    .header-bar {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .avatar-wrapper {
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 3px solid rgba(255, 255, 255, 0.95);
+      box-shadow: 0 4px 14px rgba(18, 50, 30, 0.15);
+      flex-shrink: 0;
+      position: relative;
+    }
+    .avatar-wrapper img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: blur(8px);
+      transform: scale(1.25);
+    }
+    .avatar-svg {
+      width: 100%;
+      height: 100%;
+      filter: blur(4px);
+    }
+
+    .name-badge-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .censor-box {
+      width: 280px;
+      height: 32px;
+      background: rgba(45, 75, 55, 0.55);
+      backdrop-filter: blur(8px);
+      border-radius: 6px;
+    }
+    .verified-icon {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+
+    /** NỘI DUNG CÂU CHUYỆN (PHỦ KÍN 90-95% THẺ, CHỮ ĐEN THAN, TỪ KHÓA XANH NGỌC LỤC BẢO SẪM) */
+    .story-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      color: #1a241e;
+      font-size: ${actualFontSize}px;
+      font-weight: 700;
+      line-height: ${actualLineHeight};
+      letter-spacing: -0.2px;
+      margin-bottom: 25px;
+    }
+    .story-paragraph {
+      margin: 0;
+    }
+    .highlight-emerald, .hl, strong {
+      color: #047857 !important;
+      font-weight: 900 !important;
+    }
+
+    /** KHU VỰC BOTTOM (DÒNG CHỮ CONTINUE READING CĂN GIỮA MÀU XANH LỤC BẢO SẪM) */
+    .cta-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-shrink: 0;
+      padding-top: 14px;
+    }
+    .cta-text {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 34px;
+      font-weight: 900;
+      color: #047857;
+      letter-spacing: -0.2px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Lớp trang trí cành lá thiên nhiên Sage Green -->
+  <div class="foliage-layer">
+    <!-- Cụm lá trên bên trái -->
+    <svg class="foliage-svg foliage-tl" viewBox="0 0 600 600">
+      <path d="M-40,-40 C120,80 180,240 220,420" stroke="#4a7356" stroke-width="6" stroke-linecap="round"/>
+      <path d="M60,60 C120,40 180,70 190,130 C150,150 90,120 60,60 Z" fill="#93b99e" opacity="0.9"/>
+      <path d="M110,130 C190,120 250,170 240,240 C180,250 130,190 110,130 Z" fill="#b1d2bc" opacity="0.85"/>
+      <path d="M150,220 C240,210 310,270 290,340 C220,350 170,280 150,220 Z" fill="#7fa78b" opacity="0.95"/>
+      <path d="M180,310 C270,320 330,390 310,470 C240,470 190,390 180,310 Z" fill="#a4c9b0" opacity="0.88"/>
+      <path d="M40,110 C-10,160 10,240 70,250 C100,200 90,140 40,110 Z" fill="#88af94" opacity="0.85"/>
+      <path d="M90,200 C30,260 60,340 130,340 C150,280 130,220 90,200 Z" fill="#bedbc6" opacity="0.8"/>
+    </svg>
+
+    <!-- Cụm lá dưới bên trái ôm viền thẻ kính mờ -->
+    <svg class="foliage-svg foliage-bl" viewBox="0 0 700 800">
+      <path d="M-50,750 C100,680 180,520 220,320" stroke="#3b6247" stroke-width="7" stroke-linecap="round"/>
+      <path d="M50,700 C140,680 210,720 220,800 C160,820 90,780 50,700 Z" fill="#769f83" opacity="0.92"/>
+      <path d="M90,620 C190,590 270,640 280,720 C200,740 130,690 90,620 Z" fill="#9dc2aa" opacity="0.9"/>
+      <path d="M130,520 C230,480 320,530 320,620 C240,640 170,580 130,520 Z" fill="#badac4" opacity="0.85"/>
+      <path d="M170,420 C270,390 360,450 350,530 C270,550 200,480 170,420 Z" fill="#699276" opacity="0.95"/>
+      <path d="M200,320 C290,280 380,330 380,420 C300,430 230,370 200,320 Z" fill="#a8cca4" opacity="0.88"/>
+      <path d="M60,560 C-10,510 -10,430 50,400 C90,440 90,520 60,560 Z" fill="#88af95" opacity="0.85"/>
+      <path d="M110,460 C40,400 50,310 120,290 C150,340 150,420 110,460 Z" fill="#b5d7bf" opacity="0.8"/>
+    </svg>
+
+    <!-- Cụm lá trang trí bên phải -->
+    <svg class="foliage-svg foliage-tr" viewBox="0 0 500 500">
+      <path d="M480,-20 C360,80 300,200 260,340" stroke="#4a7356" stroke-width="5" stroke-linecap="round"/>
+      <path d="M400,60 C330,50 280,90 280,150 C340,160 390,120 400,60 Z" fill="#9ec3ab" opacity="0.85"/>
+      <path d="M350,140 C270,140 220,190 230,260 C290,260 340,210 350,140 Z" fill="#7fa68b" opacity="0.9"/>
+      <path d="M300,230 C230,240 180,300 200,370 C260,360 300,300 300,230 Z" fill="#b9dac4" opacity="0.8"/>
+    </svg>
+
+    <svg class="foliage-svg foliage-br" viewBox="0 0 500 500">
+      <path d="M460,460 C360,380 300,280 270,160" stroke="#426b4e" stroke-width="5" stroke-linecap="round"/>
+      <path d="M390,400 C320,390 280,340 300,280 C360,280 400,330 390,400 Z" fill="#8fb59c" opacity="0.85"/>
+      <path d="M340,300 C270,300 230,240 250,180 C310,180 350,240 340,300 Z" fill="#aed1b9" opacity="0.8"/>
+    </svg>
+  </div>
+
+  <div class="ambient-glow"></div>
+
+  <!-- Thẻ kính mờ trắng ngọc trai -->
+  <div class="content-card">
+    <div class="header-bar">
+      <div class="avatar-wrapper">
+        ${avatarHtml}
+      </div>
+      <div class="name-badge-row">
+        <div class="censor-box"></div>
+        <svg class="verified-icon" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" fill="#1877f2"/>
+          <path d="M7.5 12L10.5 15L16.5 9" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="story-body" id="storyBody">
+      ${storyData.hookQuote ? `<p class="story-paragraph highlight-emerald">${storyData.hookQuote}</p>` : ''}
+      ${storyData.paragraphs.map(p => `<p class="story-paragraph">${p}</p>`).join('\n      ')}
+    </div>
+
+    <div class="cta-container">
+      <div class="cta-text">Continue Reading...</div>
+    </div>
+  </div>
+</body>
+</html>`;
+  }
+
+  /**
+   * ZTTeam: Mẫu cũ - Frosted Glass Card (Kính mờ hiện đại & Aurora Glow)
    */
   private ztteam_buildFrostedGlassHtml(
     storyData: { hookQuote: string; paragraphs: string[]; plainText: string },
