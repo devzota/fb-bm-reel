@@ -910,6 +910,30 @@ export class ZTTeamHookVideoService {
       ? `<img src="${pageAvatarDataUri}" alt="Avatar" />`
       : `<svg class="avatar-svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#d4c2aa"/><circle cx="50" cy="40" r="20" fill="#755a3d"/><circle cx="50" cy="85" r="32" fill="#755a3d"/></svg>`;
 
+    /** ZTTeam: Fluid typography tối ưu riêng cho phông Oswald (Condensed) */
+    const wordCount = storyData.plainText.trim().split(/\s+/).length;
+    let actualFontSize = 33;
+    let actualLineHeight = 1.30;
+    let actualPGap = 16;
+
+    if (wordCount < 130) {
+      actualFontSize = 38;
+      actualLineHeight = 1.34;
+      actualPGap = 22;
+    } else if (wordCount < 170) {
+      actualFontSize = 35;
+      actualLineHeight = 1.32;
+      actualPGap = 18;
+    } else if (wordCount <= 215) {
+      actualFontSize = 31;
+      actualLineHeight = 1.28;
+      actualPGap = 15;
+    } else {
+      actualFontSize = 28;
+      actualLineHeight = 1.25;
+      actualPGap = 12;
+    }
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -964,7 +988,7 @@ export class ZTTeamHookVideoService {
       background: #fbf8f2;
       border-radius: 38px;
       box-shadow: 0 25px 70px rgba(90, 70, 50, 0.18), 0 4px 16px rgba(90, 70, 50, 0.08);
-      padding: 55px 65px 45px 65px;
+      padding: 50px 60px 40px 60px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -978,7 +1002,7 @@ export class ZTTeamHookVideoService {
       display: flex;
       align-items: center;
       gap: 22px;
-      margin-bottom: 25px;
+      margin-bottom: 20px;
     }
     .avatar-wrapper {
       width: 92px;
@@ -1015,11 +1039,11 @@ export class ZTTeamHookVideoService {
     .story-body {
       display: flex;
       flex-direction: column;
-      gap: ${pGap}px;
+      gap: ${actualPGap}px;
       color: #1a1918;
-      font-size: ${fontSize}px;
+      font-size: ${actualFontSize}px;
       font-weight: 700;
-      line-height: ${lineHeight};
+      line-height: ${actualLineHeight};
       letter-spacing: -0.2px;
     }
     .story-paragraph {
@@ -1036,7 +1060,7 @@ export class ZTTeamHookVideoService {
       justify-content: center;
       align-items: center;
       margin-top: 15px;
-      padding-top: 10px;
+      padding-top: 5px;
     }
     .cta-pill {
       background: #ded4c5;
@@ -1094,6 +1118,30 @@ export class ZTTeamHookVideoService {
       ? `<img src="${pageAvatarDataUri}" alt="Avatar" />`
       : `<svg class="avatar-svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#d4c2aa"/><circle cx="50" cy="40" r="20" fill="#755a3d"/><circle cx="50" cy="85" r="32" fill="#755a3d"/></svg>`;
 
+    /** ZTTeam: Fluid typography tối ưu riêng cho phông Montserrat (Geometric Sans rộng) kết hợp nút lớn phía dưới */
+    const wordCount = storyData.plainText.trim().split(/\s+/).length;
+    let actualFontSize = 26;
+    let actualLineHeight = 1.30;
+    let actualPGap = 14;
+
+    if (wordCount < 130) {
+      actualFontSize = 32;
+      actualLineHeight = 1.34;
+      actualPGap = 18;
+    } else if (wordCount < 170) {
+      actualFontSize = 29;
+      actualLineHeight = 1.30;
+      actualPGap = 15;
+    } else if (wordCount <= 215) {
+      actualFontSize = 26;
+      actualLineHeight = 1.28;
+      actualPGap = 13;
+    } else {
+      actualFontSize = 23;
+      actualLineHeight = 1.25;
+      actualPGap = 10;
+    }
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1124,7 +1172,7 @@ export class ZTTeamHookVideoService {
       background: #f4ecda;
       border-radius: 40px;
       box-shadow: 0 30px 80px rgba(35, 20, 5, 0.4), 0 8px 24px rgba(35, 20, 5, 0.15);
-      padding: 55px 65px 45px 65px;
+      padding: 50px 60px 40px 60px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -1138,7 +1186,7 @@ export class ZTTeamHookVideoService {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 25px;
+      margin-bottom: 20px;
     }
     .header-left {
       display: flex;
@@ -1190,12 +1238,12 @@ export class ZTTeamHookVideoService {
     .story-body {
       display: flex;
       flex-direction: column;
-      gap: ${pGap}px;
+      gap: ${actualPGap}px;
       color: #141311;
-      font-size: ${fontSize}px;
+      font-size: ${actualFontSize}px;
       font-weight: 800;
-      line-height: ${lineHeight};
-      letter-spacing: -0.3px;
+      line-height: ${actualLineHeight};
+      letter-spacing: -0.2px;
     }
     .story-paragraph {
       margin: 0;
@@ -1205,32 +1253,32 @@ export class ZTTeamHookVideoService {
       font-weight: 900;
     }
 
-    /** KHU VỰC BOTTOM: HOOK QUESTION + NÚT LỚN */
+    /** KHU VỰC BOTTOM: HOOK QUESTION + NÚT LỚN (ĐƯỢC BẢO VỆ VỊ TRÍ TUYỆT ĐỐI) */
     .bottom-section {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 16px;
-      margin-top: 20px;
-      padding-top: 10px;
+      gap: 12px;
+      margin-top: 15px;
+      padding-top: 5px;
     }
     .question-hook {
-      font-size: 35px;
+      font-size: 30px;
       font-weight: 900;
       color: #141311;
       text-align: center;
     }
     .btn-read-more {
       width: 100%;
-      max-width: 720px;
+      max-width: 660px;
       background: #9e741a;
       border-radius: 9999px;
-      padding: 22px 40px;
-      font-size: 35px;
+      padding: 18px 36px;
+      font-size: 32px;
       font-weight: 800;
       color: #ffffff;
       text-align: center;
-      box-shadow: 0 12px 28px rgba(158, 116, 26, 0.42);
+      box-shadow: 0 10px 24px rgba(158, 116, 26, 0.40);
       letter-spacing: 0.2px;
     }
   </style>
