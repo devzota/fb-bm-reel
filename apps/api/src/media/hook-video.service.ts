@@ -496,7 +496,43 @@ export class ZTTeamHookVideoService {
         try {
           await page.evaluateHandle('document.fonts.ready');
         } catch (fontErr) { /** Bỏ qua */ }
-        await new Promise(r => setTimeout(r, 1200));
+        await new Promise(r => setTimeout(r, 600));
+
+        /** ZTTeam: Thuật toán Auto-Fit tự động tối ưu hóa cỡ chữ để nội dung phủ kín 90-95% thẻ */
+        try {
+          await page.evaluate(() => {
+            const body = document.getElementById('storyBody');
+            const container = (document.querySelector('.content-card') || document.querySelector('.glass-card')) as HTMLElement;
+            if (!body || !container) return;
+
+            const header = (document.querySelector('.header-bar') || document.querySelector('.external-header')) as HTMLElement;
+            const footer = (document.querySelector('.bottom-section') || document.querySelector('.cta-container') || document.querySelector('.cta-row')) as HTMLElement;
+            const headerHeight = header ? header.offsetHeight : 100;
+            const footerHeight = footer ? footer.offsetHeight : 80;
+
+            const availableHeight = container.clientHeight - headerHeight - footerHeight - 110;
+
+            let low = 24, high = 46, best = 32;
+            for (let i = 0; i < 8; i++) {
+              const mid = Math.round((low + high) / 2);
+              body.style.fontSize = mid + 'px';
+              body.style.lineHeight = (mid > 34 ? '1.28' : '1.32');
+
+              const currentHeight = body.scrollHeight;
+              if (currentHeight <= availableHeight) {
+                best = mid;
+                low = mid + 1;
+              } else {
+                high = mid - 1;
+              }
+            }
+            body.style.fontSize = best + 'px';
+            body.style.lineHeight = (best > 34 ? '1.28' : '1.32');
+          });
+        } catch (evalErr) {
+          /** Bỏ qua nếu evaluate lỗi */
+        }
+        await new Promise(r => setTimeout(r, 400));
 
         const framePngPath = path.join(tempDir, 'text_story_frame.png');
         await page.screenshot({ path: framePngPath, omitBackground: false, type: 'png' });
@@ -1035,16 +1071,18 @@ export class ZTTeamHookVideoService {
       box-shadow: inset 0 2px 4px rgba(0,0,0,0.25);
     }
 
-    /** NỘI DUNG CÂU CHUYỆN */
+    /** NỘI DUNG CÂU CHUYỆN (FLEX 1 DÀN ĐỀU PHỦ KÍN THẺ) */
     .story-body {
+      flex: 1;
       display: flex;
       flex-direction: column;
-      gap: ${actualPGap}px;
+      justify-content: space-between;
       color: #1a1918;
       font-size: ${actualFontSize}px;
       font-weight: 700;
       line-height: ${actualLineHeight};
       letter-spacing: -0.2px;
+      margin-bottom: 25px;
     }
     .story-paragraph {
       margin: 0;
@@ -1059,8 +1097,8 @@ export class ZTTeamHookVideoService {
       display: flex;
       justify-content: center;
       align-items: center;
-      margin-top: 15px;
-      padding-top: 5px;
+      flex-shrink: 0;
+      padding-top: 10px;
     }
     .cta-pill {
       background: #ded4c5;
@@ -1081,18 +1119,16 @@ export class ZTTeamHookVideoService {
   <div class="outer-border-inner"></div>
 
   <div class="content-card">
-    <div class="main-content-area">
-      <div class="header-bar">
-        <div class="avatar-wrapper">
-          ${avatarHtml}
-        </div>
-        <div class="censor-brush"></div>
+    <div class="header-bar">
+      <div class="avatar-wrapper">
+        ${avatarHtml}
       </div>
+      <div class="censor-brush"></div>
+    </div>
 
-      <div class="story-body">
-        ${storyData.hookQuote ? `<p class="story-paragraph highlight-red">${storyData.hookQuote}</p>` : ''}
-        ${storyData.paragraphs.map(p => `<p class="story-paragraph">${p}</p>`).join('\n        ')}
-      </div>
+    <div class="story-body" id="storyBody">
+      ${storyData.hookQuote ? `<p class="story-paragraph highlight-red">${storyData.hookQuote}</p>` : ''}
+      ${storyData.paragraphs.map(p => `<p class="story-paragraph">${p}</p>`).join('\n      ')}
     </div>
 
     <div class="cta-container">
@@ -1234,16 +1270,18 @@ export class ZTTeamHookVideoService {
       gap: 6px;
     }
 
-    /** NỘI DUNG CÂU CHUYỆN */
+    /** NỘI DUNG CÂU CHUYỆN (FLEX 1 DÀN ĐỀU PHỦ KÍN THẺ) */
     .story-body {
+      flex: 1;
       display: flex;
       flex-direction: column;
-      gap: ${actualPGap}px;
+      justify-content: space-between;
       color: #141311;
       font-size: ${actualFontSize}px;
       font-weight: 800;
       line-height: ${actualLineHeight};
       letter-spacing: -0.2px;
+      margin-bottom: 25px;
     }
     .story-paragraph {
       margin: 0;
@@ -1259,8 +1297,7 @@ export class ZTTeamHookVideoService {
       flex-direction: column;
       align-items: center;
       gap: 12px;
-      margin-top: 15px;
-      padding-top: 5px;
+      flex-shrink: 0;
     }
     .question-hook {
       font-size: 30px;
@@ -1285,21 +1322,19 @@ export class ZTTeamHookVideoService {
 </head>
 <body>
   <div class="content-card">
-    <div class="main-content-area">
-      <div class="header-bar">
-        <div class="header-left">
-          <div class="avatar-wrapper">
-            ${avatarHtml}
-          </div>
-          <div class="censor-box"></div>
+    <div class="header-bar">
+      <div class="header-left">
+        <div class="avatar-wrapper">
+          ${avatarHtml}
         </div>
-        <div class="badge-full">1/Full</div>
+        <div class="censor-box"></div>
       </div>
+      <div class="badge-full">1/Full</div>
+    </div>
 
-      <div class="story-body">
-        ${storyData.hookQuote ? `<p class="story-paragraph highlight-gold">${storyData.hookQuote}</p>` : ''}
-        ${storyData.paragraphs.map(p => `<p class="story-paragraph">${p}</p>`).join('\n        ')}
-      </div>
+    <div class="story-body" id="storyBody">
+      ${storyData.hookQuote ? `<p class="story-paragraph highlight-gold">${storyData.hookQuote}</p>` : ''}
+      ${storyData.paragraphs.map(p => `<p class="story-paragraph">${p}</p>`).join('\n      ')}
     </div>
 
     <div class="bottom-section">
@@ -1593,7 +1628,7 @@ export class ZTTeamHookVideoService {
     <div class="glass-card">
       <div class="card-top-content">
         <div class="story-hook">${storyData.hookQuote}</div>
-        <div class="story-body">
+        <div class="story-body" id="storyBody">
           ${storyData.paragraphs.map(p => `<p class="story-p">${p}</p>`).join('\n          ')}
         </div>
       </div>
