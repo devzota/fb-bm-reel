@@ -105,10 +105,12 @@ export class ZTTeamImageController {
     const limitNum = Math.max(1, parseInt(limit, 10) || 24);
     const skip = (pageNum - 1) * limitNum;
 
-    /** Base where theo User sở hữu Fanpage HOẶC bài đăng thủ công độc lập (page_id = null) */
-    let baseWhere: any;
+    /** Base conditions array cho toàn bộ query */
+    const baseConditions: any[] = [];
+
+    /** 1. Base where theo User sở hữu Fanpage HOẶC bài đăng thủ công độc lập (page_id = null) */
     if (fbPageId === 'MANUAL' || fbPageId === 'manual') {
-      baseWhere = { page_id: null };
+      baseConditions.push({ page_id: null });
     } else if (fbPageId) {
       const p = await this.prisma.ztteam_pages.findFirst({
         where: {
@@ -122,12 +124,12 @@ export class ZTTeamImageController {
         return {
           data: [],
           total: 0,
-          counts: { total: 0, queued: 0, rendering: 0, completed: 0, posted: 0, failed: 0, videoFailed: 0 },
+          counts: { total: 0, queued: 0, rendering: 0, completed: 0, posted: 0, failed: 0, videoFailed: 0, manual: 0 },
         };
       }
-      baseWhere = { page_id: p.id };
+      baseConditions.push({ page_id: p.id });
     } else {
-      baseWhere = {
+      baseConditions.push({
         OR: [
           {
             page: {
@@ -140,67 +142,95 @@ export class ZTTeamImageController {
             page_id: null,
           },
         ],
-      };
+      });
     }
 
-    /** Điều kiện where cho danh sách hiển thị */
-    const where: any = { ...baseWhere };
-
-    /** Lọc từ khóa tìm kiếm (Tiêu đề, URL hoặc Caption) */
+    /** 2. Lọc từ khóa tìm kiếm (Tiêu đề, URL hoặc Caption) */
     if (search && search.trim()) {
       const kw = search.trim();
-      where.OR = [
-        { wp_post_title: { contains: kw, mode: 'insensitive' } },
-        { wp_post_url: { contains: kw, mode: 'insensitive' } },
-        { ai_caption: { contains: kw, mode: 'insensitive' } },
-      ];
+      baseConditions.push({
+        OR: [
+          { wp_post_title: { contains: kw, mode: 'insensitive' } },
+          { wp_post_url: { contains: kw, mode: 'insensitive' } },
+          { ai_caption: { contains: kw, mode: 'insensitive' } },
+        ],
+      });
     }
 
-    /** ZTTeam: Lọc trạng thái bài viết hoặc lỗi video render */
-    if (status) {
-      const s = status.toUpperCase();
-      if (s === 'VIDEO_FAILED') {
-        where.video_status = 'FAILED';
-      } else if (s === 'POSTED') {
-        const postedCondition = [{ is_posted: true }, { status: 'POSTED' }];
-        if (where.OR) {
-          where.AND = [{ OR: where.OR }, { OR: postedCondition }];
-          delete where.OR;
-        } else {
-          where.OR = postedCondition;
-        }
-      } else if (s === 'COMPLETED') {
-        where.status = 'COMPLETED';
-        where.is_posted = false;
-      } else if (s === 'QUEUED') {
-        where.status = 'QUEUED';
-        where.is_posted = false;
-      } else if (s === 'RENDERING' || s === 'PROCESSING') {
-        where.status = { in: ['RENDERING', 'PROCESSING'] };
-        where.is_posted = false;
-      } else if (s === 'FAILED') {
-        where.status = 'FAILED';
-      }
-    }
-
-    /** ZTTeam: Lọc theo trạng thái video render riêng biệt (nếu có) */
+    /** 3. ZTTeam: Lọc theo trạng thái video render riêng biệt (nếu có) */
     if (videoStatus) {
       const vs = videoStatus.toUpperCase();
       if (vs === 'FAILED') {
-        where.video_status = 'FAILED';
+        baseConditions.push({ video_status: 'FAILED' });
       } else if (vs === 'PENDING') {
-        where.video_status = 'PENDING';
+        baseConditions.push({ video_status: 'PENDING' });
       } else if (vs === 'COMPLETED') {
-        where.video_status = 'COMPLETED';
+        baseConditions.push({ video_status: 'COMPLETED' });
       } else if (vs === 'NONE') {
-        where.video_status = { in: ['NONE', null] };
+        baseConditions.push({ video_status: { in: ['NONE', null] } });
       }
     }
 
-    /** ZTTeam: Lọc theo định dạng Engine Video (text_story / hook_image / muse) */
+    /** 4. ZTTeam: Lọc theo định dạng Engine Video (text_story / hook_image / muse) */
     if (videoEngine && videoEngine.trim()) {
-      where.video_engine = videoEngine.trim();
+      const ve = videoEngine.trim();
+      if (ve === 'text_story') {
+        baseConditions.push({
+          OR: [
+            { video_engine: 'text_story' },
+            { video_url: { contains: 'text_story_reel_' } },
+          ],
+          video_url: { not: null },
+        });
+      } else if (ve === 'hook_image') {
+        baseConditions.push({
+          OR: [
+            { video_engine: 'hook_image' },
+            { video_url: { contains: 'hook_reel_' } },
+          ],
+          video_url: { not: null },
+        });
+      } else if (ve === 'muse') {
+        baseConditions.push({
+          OR: [
+            { video_engine: 'muse' },
+            { video_url: { contains: 'muse_reel_' } },
+          ],
+          video_url: { not: null },
+        });
+      }
     }
+
+    /** Điều kiện nền chuẩn hóa cho các tab đếm số lượng (đồng bộ với bộ lọc search, videoEngine, videoStatus) */
+    const filterBaseWhere: any = baseConditions.length > 0 ? { AND: baseConditions } : {};
+
+    /** Điều kiện where cho danh sách hiển thị (thêm lọc theo status tab nếu có) */
+    const displayConditions = [...baseConditions];
+
+    /** ZTTeam: Lọc trạng thái bài viết hoặc lỗi video render theo Tab được chọn */
+    if (status) {
+      const s = status.toUpperCase();
+      if (s === 'VIDEO_FAILED') {
+        displayConditions.push({ video_status: 'FAILED' });
+      } else if (s === 'POSTED') {
+        displayConditions.push({
+          OR: [{ is_posted: true }, { status: 'POSTED' }],
+        });
+      } else if (s === 'COMPLETED') {
+        displayConditions.push({ status: 'COMPLETED', is_posted: false });
+      } else if (s === 'QUEUED') {
+        displayConditions.push({ status: 'QUEUED', is_posted: false });
+      } else if (s === 'RENDERING' || s === 'PROCESSING') {
+        displayConditions.push({
+          status: { in: ['RENDERING', 'PROCESSING'] },
+          is_posted: false,
+        });
+      } else if (s === 'FAILED') {
+        displayConditions.push({ status: 'FAILED' });
+      }
+    }
+
+    const where: any = displayConditions.length > 0 ? { AND: displayConditions } : {};
 
     /** Đếm song song số lượng bài theo từng trạng thái để hiển thị Tabs */
     const [
@@ -223,24 +253,24 @@ export class ZTTeamImageController {
         include: { page: true },
       }),
       this.prisma.ztteam_images.count({ where }),
-      this.prisma.ztteam_images.count({ where: baseWhere }),
+      this.prisma.ztteam_images.count({ where: filterBaseWhere }),
       this.prisma.ztteam_images.count({
-        where: { ...baseWhere, status: 'QUEUED', is_posted: false },
+        where: { AND: [...baseConditions, { status: 'QUEUED', is_posted: false }] },
       }),
       this.prisma.ztteam_images.count({
-        where: { ...baseWhere, status: { in: ['RENDERING', 'PROCESSING'] }, is_posted: false },
+        where: { AND: [...baseConditions, { status: { in: ['RENDERING', 'PROCESSING'] }, is_posted: false }] },
       }),
       this.prisma.ztteam_images.count({
-        where: { ...baseWhere, status: 'COMPLETED', is_posted: false },
+        where: { AND: [...baseConditions, { status: 'COMPLETED', is_posted: false }] },
       }),
       this.prisma.ztteam_images.count({
-        where: { ...baseWhere, OR: [{ is_posted: true }, { status: 'POSTED' }] },
+        where: { AND: [...baseConditions, { OR: [{ is_posted: true }, { status: 'POSTED' }] }] },
       }),
       this.prisma.ztteam_images.count({
-        where: { ...baseWhere, status: 'FAILED' },
+        where: { AND: [...baseConditions, { status: 'FAILED' }] },
       }),
       this.prisma.ztteam_images.count({
-        where: { ...baseWhere, video_status: 'FAILED' },
+        where: { AND: [...baseConditions, { video_status: 'FAILED' }] },
       }),
       this.prisma.ztteam_images.count({
         where: { page_id: null },

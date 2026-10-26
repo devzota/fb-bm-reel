@@ -216,6 +216,7 @@ export default function AIFactory() {
   const ztteam_resetFilters = () => {
     setFilterStatus('');
     setFilterVideoStatus('');
+    setFilterVideoEngine('');
     setFilterPage('');
     setSearchKeyword('');
     setDebouncedKeyword('');
@@ -448,7 +449,7 @@ export default function AIFactory() {
           </div>
 
           {/** Nút Đặt Lại (Hiển thị khi đang lọc) */}
-          {(filterStatus || filterVideoStatus || filterPage || searchKeyword) && (
+          {(filterStatus || filterVideoStatus || filterVideoEngine || filterPage || searchKeyword) && (
             <button
               type="button"
               onClick={ztteam_resetFilters}
