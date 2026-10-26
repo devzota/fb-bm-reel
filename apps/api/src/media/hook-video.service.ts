@@ -1081,6 +1081,20 @@ export class ZTTeamHookVideoService {
       transform: rotate(-0.5deg);
       box-shadow: inset 0 2px 4px rgba(0,0,0,0.25);
     }
+    .header-col {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .brand-zt {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: #7c6b58;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding-left: 4px;
+    }
 
     /** NỘI DUNG CÂU CHUYỆN (FLEX 1 DÀN ĐỀU PHỦ KÍN THẺ) */
     .story-body {
@@ -1134,7 +1148,10 @@ export class ZTTeamHookVideoService {
       <div class="avatar-wrapper">
         ${avatarHtml}
       </div>
-      <div class="censor-brush"></div>
+      <div class="header-col">
+        <div class="censor-brush"></div>
+        <div class="brand-zt">ZT</div>
+      </div>
     </div>
 
     <div class="story-body" id="storyBody">
@@ -1268,6 +1285,20 @@ export class ZTTeamHookVideoService {
       background: #7c7263;
       border-radius: 6px;
     }
+    .header-col {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .brand-zt {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: #8a6d2c;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding-left: 2px;
+    }
 
     .badge-full {
       border: 2px solid #a67c26;
@@ -1338,7 +1369,10 @@ export class ZTTeamHookVideoService {
         <div class="avatar-wrapper">
           ${avatarHtml}
         </div>
-        <div class="censor-box"></div>
+        <div class="header-col">
+          <div class="censor-box"></div>
+          <div class="brand-zt">ZT</div>
+        </div>
       </div>
       <div class="badge-full">1/Full</div>
     </div>
@@ -1541,6 +1575,20 @@ export class ZTTeamHookVideoService {
       filter: blur(4px);
     }
 
+    .name-col {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .brand-zt {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: #2d5a3c;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding-left: 2px;
+    }
     .name-badge-row {
       display: flex;
       align-items: center;
@@ -1646,12 +1694,15 @@ export class ZTTeamHookVideoService {
       <div class="avatar-wrapper">
         ${avatarHtml}
       </div>
-      <div class="name-badge-row">
-        <div class="censor-box"></div>
-        <svg class="verified-icon" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" fill="#1877f2"/>
-          <path d="M7.5 12L10.5 15L16.5 9" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+      <div class="name-col">
+        <div class="name-badge-row">
+          <div class="censor-box"></div>
+          <svg class="verified-icon" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" fill="#1877f2"/>
+            <path d="M7.5 12L10.5 15L16.5 9" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="brand-zt">ZT</div>
       </div>
     </div>
 
@@ -1834,10 +1885,11 @@ export class ZTTeamHookVideoService {
 
     .post-submeta {
       font-family: 'Montserrat', sans-serif;
-      font-size: 18px;
-      font-weight: 500;
+      font-size: 19px;
+      font-weight: 800;
       color: #94a3b8;
-      letter-spacing: -0.2px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
     }
 
     .glass-card-wrapper {
@@ -1942,7 +1994,7 @@ export class ZTTeamHookVideoService {
           <path d="M7.5 12L10.5 15L16.5 9" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
-      <span class="post-submeta">4 hours ago • A Text Story • facebook.com</span>
+      <span class="post-submeta">ZT</span>
     </div>
   </div>
 
