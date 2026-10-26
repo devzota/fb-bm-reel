@@ -81,6 +81,7 @@ export class ZTTeamMediaController {
       videoEngine?: string;
       forceRegenContent?: boolean;
       templateStyle?: 'vintage_paper' | 'parchment_gold' | 'frosted_glass';
+      force?: boolean;
     }
   ) {
     const result = await this.hookVideoService.ztteam_renderHookVideo(imageId, {
@@ -89,6 +90,7 @@ export class ZTTeamMediaController {
       videoEngine: body?.videoEngine,
       forceRegenContent: body?.forceRegenContent,
       templateStyle: body?.templateStyle,
+      force: body?.force ?? true,
     });
     return result;
   }
