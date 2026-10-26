@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useUIStore } from '../stores/uiStore';
 import api from '../services/api';
 
@@ -46,6 +46,19 @@ export default function ZTTeamAIPostCard({
   const [showVideo, setShowVideo] = useState(Boolean(item.video_url));
   const [isMarkingPosted, setIsMarkingPosted] = useState(false);
   const { ztteam_showToast } = useUIStore();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  /** ZTTeam: Bật / Tắt phát video khi người dùng click vào khung hoặc nút Play */
+  const ztteam_handleTogglePlayVideo = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!videoRef.current) return;
+    if (videoRef.current.paused) {
+      videoRef.current.play().catch(() => {});
+    } else {
+      videoRef.current.pause();
+    }
+  };
 
   /** ZTTeam: Ưu tiên hiển thị Video ngay khi bài viết đã có video_url */
   useEffect(() => {
@@ -327,6 +340,10 @@ export default function ZTTeamAIPostCard({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (showVideo && videoRef.current) {
+                      videoRef.current.pause();
+                      setIsPlaying(false);
+                    }
                     setShowVideo(!showVideo);
                   }}
                   className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all shadow-md cursor-pointer ${
@@ -411,15 +428,33 @@ export default function ZTTeamAIPostCard({
               </div>
             </div>
           ) : item.video_url && showVideo ? (
-            <div className="w-full h-full relative bg-black flex items-center justify-center">
+            <div
+              className="w-full h-full relative bg-black flex items-center justify-center cursor-pointer group/video overflow-hidden"
+              onClick={ztteam_handleTogglePlayVideo}
+            >
               <video
+                ref={videoRef}
                 src={item.video_url}
                 controls
-                autoPlay
                 loop
                 playsInline
+                preload="metadata"
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onEnded={() => setIsPlaying(false)}
                 className="w-full h-full object-cover"
               />
+              {/** ZTTeam: Nút Play Overlay khi video chưa phát hoặc đang tạm dừng */}
+              {!isPlaying && (
+                <div
+                  className="absolute inset-0 bg-black/30 backdrop-blur-[1px] flex items-center justify-center transition-all group-hover/video:bg-black/40"
+                  title="Bấm để phát video"
+                >
+                  <div className="w-13 h-13 rounded-full bg-black/70 hover:bg-black/90 border border-amber-400/60 text-amber-300 hover:text-white flex items-center justify-center shadow-2xl hover:scale-110 transition-transform cursor-pointer">
+                    <span className="material-symbols-outlined text-3xl ml-0.5 select-none">play_arrow</span>
+                  </div>
+                </div>
+              )}
             </div>
           ) : item.image_url ? (
             <div
