@@ -280,6 +280,28 @@ model ztteam_image_history {
   @@unique([page_id, wp_post_id])
 }
 
+/** ZTTeam: Theo dõi mốc Views 1K/4K và bình luận tự động của Video Reel */
+model ztteam_reel_milestones {
+  id                String    @id @default(cuid())
+  post_id           String    @unique
+  post_type         String    @default("image") /** 'image' hoặc 'reel' */
+  fb_post_id        String
+  page_id           String
+  current_views     Int       @default(0)
+  notified_1k       Boolean   @default(false)
+  notified_1k_at    DateTime?
+  notified_4k       Boolean   @default(false)
+  notified_4k_at    DateTime?
+  commented_link    Boolean   @default(false)
+  commented_link_at DateTime?
+  comment_fb_id     String?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@index([fb_post_id])
+  @@index([page_id])
+}
+
 model ztteam_youtube_sources {
   id            String   @id @default(uuid())
   name          String
