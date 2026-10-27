@@ -417,14 +417,25 @@ export class ZTTeamHookVideoService {
         if (fs.existsSync(storyDataFile) && !options?.forceRegenContent) {
           try {
             storyData = JSON.parse(fs.readFileSync(storyDataFile, 'utf-8'));
-            /** ZTTeam: Kiểm tra nếu kịch bản cũ là do fallback cào thô thì bắt buộc hủy bỏ để AI tạo mới */
+            /** ZTTeam: Kiểm tra nếu kịch bản cũ là do fallback cào thô, lặp tiêu đề 2 lần, hoặc thiếu highlight thì bắt buộc hủy bỏ để AI tạo mới */
             const textCheck = (storyData?.hookQuote || '') + ' ' + (storyData?.paragraphs || []).join(' ');
-            const isFallbackData = textCheck.includes('CONTINUED IN THE COMMENTS') ||
-              textCheck.includes('👇') ||
-              (storyData?.hookQuote && storyData.hookQuote === storyData.hookQuote.toUpperCase() && storyData.hookQuote.length > 20);
+            const hookQ = (storyData?.hookQuote || '').trim();
+            const p0 = ((storyData?.paragraphs && storyData?.paragraphs[0]) || '').trim();
+            const cleanTitle = (imageRecord.wp_post_title || '').replace(/[^\w\s]/g, '').toLowerCase().trim();
+            const cleanHook = hookQ.replace(/[^\w\s]/g, '').toLowerCase().trim();
+            const cleanP0 = p0.replace(/<[^>]*>/g, '').replace(/[^\w\s]/g, '').toLowerCase().trim();
+
+            const hookIsTitle = cleanTitle.length > 15 && cleanHook.length > 15 && (cleanHook === cleanTitle || cleanHook.startsWith(cleanTitle.substring(0, 30)));
+            const p0IsTitle = cleanTitle.length > 15 && cleanP0.startsWith(cleanTitle.substring(0, 25));
+            const p0IsHook = cleanHook.length > 15 && cleanP0.startsWith(cleanHook.substring(0, 25));
+            const p0IsUpper = p0.replace(/<[^>]*>/g, '').trim().length > 25 && p0.replace(/<[^>]*>/g, '').trim().substring(0, 30) === p0.replace(/<[^>]*>/g, '').trim().substring(0, 30).toUpperCase();
+            const hasHighlight = textCheck.includes('<span class="hl">');
+            const hasCTA = textCheck.includes('CONTINUED IN THE COMMENTS') || textCheck.includes('👇');
+
+            const isFallbackData = !hasHighlight || hasCTA || hookIsTitle || p0IsTitle || p0IsHook || p0IsUpper || (hookQ && hookQ === hookQ.toUpperCase() && hookQ.length > 20);
 
             if (isFallbackData) {
-              this.logger.warn(`[Text Story Reel] Kịch bản bài ${imageId} dính bài cào thô. Tự động hủy cache để AI tạo kịch bản mới 100%!`);
+              this.logger.warn(`[Text Story Reel] Kịch bản bài ${imageId} dính bài cào thô/lặp title. Tự động hủy cache để AI tạo kịch bản mới 100%!`);
               storyData = null;
             } else {
               this.logger.log(`[Text Story Reel] Tái sử dụng kịch bản AI đạt chuẩn cho bài viết ${imageId}`);
