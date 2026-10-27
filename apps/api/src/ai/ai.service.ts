@@ -49,7 +49,7 @@ export class ZTTeamAIService {
     const { GoogleGenerativeAI } = require('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(geminiKey);
 
-    const modelsToTry = ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.0-flash', 'gemini-1.5-flash-latest'];
+    const modelsToTry = ['gemini-flash-lite-latest', 'gemini-2.0-flash', 'gemini-3.5-flash-lite'];
     let lastError: any = null;
 
     for (const modelName of modelsToTry) {
@@ -880,11 +880,28 @@ Full Story:
       let rawResponse = '';
 
       if (settings.activeProvider === 'gemini' && settings.geminiKey) {
-        rawResponse = await this.ztteam_callGeminiWithFallback(
-          settings.geminiKey,
-          systemPrompt,
-          { temperature: 0.75, maxTokens: 800 }
-        );
+        try {
+          rawResponse = await this.ztteam_callGeminiWithFallback(
+            settings.geminiKey,
+            systemPrompt,
+            { temperature: 0.75, maxTokens: 800 }
+          );
+        } catch (geminiErr: any) {
+          this.logger.warn(`Gemini gặp lỗi (${geminiErr.message}), đang chuyển sang dự phòng OpenAI...`);
+          if (settings.openaiKey) {
+            const OpenAI = require('openai').default;
+            const openai = new OpenAI({ apiKey: settings.openaiKey.trim() });
+            const response = await openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: [{ role: 'user', content: systemPrompt }],
+              max_tokens: 800,
+              temperature: 0.75,
+            });
+            rawResponse = response.choices[0]?.message?.content || '';
+          } else {
+            throw geminiErr;
+          }
+        }
       } else {
         const OpenAI = require('openai').default;
         const isDeepseek = settings.activeProvider === 'deepseek' && settings.deepseekKey;
@@ -939,40 +956,12 @@ Full Story:
           };
         }
       }
+
+      throw new Error('AI không trả về đủ cấu trúc kịch bản 3 đoạn hợp lệ.');
     } catch (err: any) {
-      this.logger.warn(`AI text story generation warning: ${err.message}. Chuyển sang trích xuất trực tiếp.`);
+      this.logger.error(`[ZTTeam AI ERROR] Lỗi tạo kịch bản AI: ${err.message}. Tuyệt đối không dùng văn bản cào thô.`);
+      throw new Error(`AI không thể tạo kịch bản Text Story: ${err.message}`);
     }
-
-    /** ZTTeam: Fallback thông minh nếu AI lỗi hoặc không có API key - tự động trích xuất 180-200 từ từ nội dung gốc */
-    return this.ztteam_fallbackTextStoryExtract(cleanTitle, cleanContent);
-  }
-
-  /**
-   * ZTTeam: Thuật toán fallback trích xuất 180 - 200 từ trực tiếp từ bài viết gốc
-   */
-  private ztteam_fallbackTextStoryExtract(
-    title: string,
-    content: string,
-  ): { hookQuote: string; paragraphs: string[]; plainText: string } {
-    const hookQuote = title.length > 5 ? title : 'A Shocking Revelation Nobody Saw Coming...';
-    const rawWords = content.split(/\s+/).filter(w => w.length > 0);
-    const targetWords = rawWords.slice(0, 190);
-
-    /** Chia ~190 từ thành 4-5 đoạn */
-    const paragraphCount = 4;
-    const chunkSize = Math.ceil(targetWords.length / paragraphCount);
-    const paragraphs: string[] = [];
-
-    const highlightRegex = /\b(husband|wife|marriage|hospital|police|secret|truth|money|million|house|car|lawyer|divorce|pain|tears|betrayal|revenge|company|contract|signed|debt|daughter|son)\b/gi;
-
-    for (let i = 0; i < targetWords.length; i += chunkSize) {
-      let pText = targetWords.slice(i, i + chunkSize).join(' ');
-      pText = pText.replace(highlightRegex, (m) => `<span class="hl">${m}</span>`);
-      paragraphs.push(pText);
-    }
-
-    const plainText = [hookQuote, ...paragraphs].join('\n\n').replace(/<[^>]*>?/gm, '');
-    return { hookQuote, paragraphs, plainText };
   }
 
   /**

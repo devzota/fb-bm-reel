@@ -268,6 +268,10 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
           <span className="px-2.5 py-1 bg-amber-500/20 text-amber-300 rounded-full text-[10px] font-extrabold shrink-0 flex items-center gap-1 shadow-sm border border-amber-500/30">
             <span className="material-symbols-outlined text-xs text-amber-400">shield_lock</span> Chờ xác minh
           </span>
+        ) : page.autoPublishEnabled === false ? (
+          <span className="px-2.5 py-1 bg-amber-500/15 text-amber-400 rounded-full text-[10px] font-extrabold shrink-0 flex items-center gap-1 shadow-sm border border-amber-500/20">
+            <span className="material-symbols-outlined text-xs">pause_circle</span> Đang tắt đăng
+          </span>
         ) : (
           <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-[10px] font-extrabold shrink-0 flex items-center gap-1 shadow-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse"></span> Active
@@ -595,7 +599,7 @@ export default function FacebookPages() {
   const navigate = useNavigate();
 
   const [testingPageId, setTestingPageId] = useState<string | null>(null);
-  const [pageTab, setPageTab] = useState<'active' | 'deactivated'>('active');
+  const [pageTab, setPageTab] = useState<'active' | 'restricted' | 'deactivated'>('active');
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
   const [isAccountsModalOpen, setIsAccountsModalOpen] = useState(false);
 
@@ -604,6 +608,7 @@ export default function FacebookPages() {
   const [filterBusiness, setFilterBusiness] = useState('');
   const [filterTag, setFilterTag] = useState('');
   const [filterSearch, setFilterSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('');
 
   /** State quản lý chọn hàng loạt */
   const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
@@ -632,6 +637,18 @@ export default function FacebookPages() {
   const uniqueBusinesses = Array.from(new Set(pages.map(p => p.businessName).filter(Boolean)));
   const uniqueTags = Array.from(new Set(pages.flatMap(p => p.tags || [])));
 
+  /** ZTTeam: Kiểm tra Fanpage có đang bị chặn, lỗi hoặc yêu cầu xác minh danh tính không */
+  const ztteam_isPageRestricted = (p: any): boolean => {
+    if (!p) return false;
+    return Boolean(
+      p.isCheckpointBlocked ||
+      p.status === 'checkpoint_required' ||
+      p.status === 'expired' ||
+      p.status === 'invalid' ||
+      (p.isActive !== false && p.autoPublishEnabled === false)
+    );
+  };
+
   const filteredPages = pages.filter(p => {
     let match = true;
     if (filterOwner && p.ownerName !== filterOwner) match = false;
@@ -643,12 +660,24 @@ export default function FacebookPages() {
       const idMatch = (p.fb_page_id || p.id || '').toLowerCase().includes(q);
       if (!nameMatch && !idMatch) match = false;
     }
+    if (filterStatus) {
+      if (filterStatus === 'healthy' && (p.isActive === false || ztteam_isPageRestricted(p))) match = false;
+      if (filterStatus === 'checkpoint' && (!p.isCheckpointBlocked && p.status !== 'checkpoint_required')) match = false;
+      if (filterStatus === 'publish_disabled' && (p.isActive === false || p.autoPublishEnabled !== false)) match = false;
+      if (filterStatus === 'token_error' && p.status !== 'expired' && p.status !== 'invalid') match = false;
+    }
     return match;
   });
 
-  const activePages = filteredPages.filter(p => p.isActive !== false);
+  /** ZTTeam: Phân nhóm Fanpage theo trạng thái hoạt động thực tế */
+  const healthyPages = filteredPages.filter(p => p.isActive !== false && !ztteam_isPageRestricted(p));
+  const restrictedPages = filteredPages.filter(p => p.isActive !== false && ztteam_isPageRestricted(p));
   const deactivatedPages = filteredPages.filter(p => p.isActive === false);
-  const currentTabPages = pageTab === 'active' ? activePages : deactivatedPages;
+  const currentTabPages = pageTab === 'active'
+    ? healthyPages
+    : pageTab === 'restricted'
+      ? restrictedPages
+      : deactivatedPages;
 
   /** Chọn / Bỏ chọn Fanpage */
   const handleToggleSelectPage = (pageId: string) => {
@@ -856,8 +885,13 @@ export default function FacebookPages() {
     }
   };
 
-  const expiredPagesCount = pages.filter(p => p.status === 'expired').length;
-  const totalFollowers = activePages.reduce((acc, p) => acc + (p.followersCount || 0), 0);
+  /** ZTTeam: Thống kê số lượng theo từng trạng thái cho toàn bộ hệ thống */
+  const totalRestrictedPages = pages.filter(p => p.isActive !== false && ztteam_isPageRestricted(p));
+  const totalCheckpointCount = pages.filter(p => p.isCheckpointBlocked || p.status === 'checkpoint_required').length;
+  const expiredPagesCount = pages.filter(p => p.status === 'expired' || p.status === 'invalid').length;
+  const totalHealthyCount = pages.filter(p => p.isActive !== false && !ztteam_isPageRestricted(p)).length;
+  const totalActivePages = pages.filter(p => p.isActive !== false);
+  const totalFollowers = totalActivePages.reduce((acc, p) => acc + (p.followersCount || 0), 0);
   const formattedFollowers = totalFollowers > 1000000 ? (totalFollowers / 1000000).toFixed(1) + 'M' :
     totalFollowers > 1000 ? (totalFollowers / 1000).toFixed(1) + 'k' : totalFollowers;
 
@@ -971,12 +1005,16 @@ export default function FacebookPages() {
         </div>
 
         {/** Card 2: Đang Hoạt Động */}
-        <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-emerald-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
+        <div 
+          onClick={() => { setPageTab('active'); setFilterStatus(''); }}
+          className="bg-gradient-to-br from-fb-surface via-fb-surface to-emerald-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group cursor-pointer hover:border-emerald-500/30 border border-transparent transition-all"
+          title="Bấm để xem danh sách Fanpage đang hoạt động bình thường"
+        >
           <div className="flex justify-between items-start mb-2">
             <div>
               <p className="text-[10px] sm:text-xs font-black text-emerald-400 uppercase tracking-wider">Đang Hoạt Động</p>
               <h3 className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1 group-hover:text-emerald-300 transition-colors">
-                {activePages.length}
+                {totalHealthyCount}
               </h3>
             </div>
             <div className="w-9 h-9 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-emerald-400 to-teal-600 text-white rounded-xl shadow-lg shadow-emerald-500/30 group-hover:scale-105 transition-transform">
@@ -984,27 +1022,33 @@ export default function FacebookPages() {
             </div>
           </div>
           <div className="flex items-center justify-between text-[11px] sm:text-xs text-fb-text-muted pt-1">
-            <span>Active: <b className="text-emerald-300 font-bold">{pages.length > 0 ? Math.round((activePages.length / pages.length) * 100) : 0}%</b></span>
-            <span className="text-emerald-400 font-bold hidden sm:inline">Auto Ready</span>
+            <span>Tỷ lệ: <b className="text-emerald-300 font-bold">{pages.length > 0 ? Math.round((totalHealthyCount / pages.length) * 100) : 0}%</b></span>
+            <span className="text-emerald-400 font-bold hidden sm:inline">Trơn tru 100%</span>
           </div>
         </div>
 
-        {/** Card 3: Token Hết Hạn */}
-        <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-red-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
+        {/** Card 3: Bị Chặn / Cần Xử Lý */}
+        <div 
+          onClick={() => { setPageTab('restricted'); setFilterStatus(''); }}
+          className={`bg-gradient-to-br from-fb-surface via-fb-surface to-amber-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group cursor-pointer transition-all border ${
+            pageTab === 'restricted' ? 'border-amber-500/50 ring-2 ring-amber-500/20' : 'border-transparent hover:border-amber-500/30'
+          }`}
+          title="Bấm để xem danh sách Fanpage đang bị chặn, lỗi hoặc chờ xác minh"
+        >
           <div className="flex justify-between items-start mb-2">
             <div>
-              <p className="text-[10px] sm:text-xs font-black text-red-400 uppercase tracking-wider">Token Hết Hạn</p>
-              <h3 className={`text-2xl sm:text-3xl font-black mt-1 transition-colors ${expiredPagesCount > 0 ? 'text-red-400 group-hover:text-red-300' : 'text-fb-text'}`}>
-                {expiredPagesCount}
+              <p className="text-[10px] sm:text-xs font-black text-amber-400 uppercase tracking-wider">Bị Chặn / Cần Xử Lý</p>
+              <h3 className={`text-2xl sm:text-3xl font-black mt-1 transition-colors ${totalRestrictedPages.length > 0 ? 'text-amber-400 group-hover:text-amber-300' : 'text-fb-text'}`}>
+                {totalRestrictedPages.length}
               </h3>
             </div>
-            <div className="w-9 h-9 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-red-500 to-rose-600 text-white rounded-xl shadow-lg shadow-red-500/30 group-hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-xl sm:text-2xl">warning</span>
+            <div className="w-9 h-9 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-amber-400 to-orange-600 text-white rounded-xl shadow-lg shadow-amber-500/30 group-hover:scale-105 transition-transform">
+              <span className="material-symbols-outlined text-xl sm:text-2xl">shield_lock</span>
             </div>
           </div>
           <div className="flex items-center justify-between text-[11px] sm:text-xs text-fb-text-muted pt-1">
-            <span>Trạng thái: <b className={expiredPagesCount > 0 ? 'text-red-400 font-bold' : 'text-emerald-400 font-bold'}>{expiredPagesCount > 0 ? 'Cần gia hạn' : 'An toàn'}</b></span>
-            <span className="text-red-400 font-bold hidden sm:inline">Token Check</span>
+            <span>Xác minh: <b className={totalCheckpointCount > 0 ? 'text-amber-400 font-bold' : 'text-slate-400 font-normal'}>{totalCheckpointCount} page</b></span>
+            <span className="text-amber-400 font-bold hidden sm:inline">Cần chú ý</span>
           </div>
         </div>
 
@@ -1033,29 +1077,50 @@ export default function FacebookPages() {
 
         {/* Filter Tabs (Cân đối đầy đặn trên Mobile) */}
         <div className="p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 border-b border-fb-surface-hover/50">
-          <div className="flex items-center gap-1.5 bg-fb-surface-hover p-1 rounded-full w-full sm:w-auto">
+          <div className="flex items-center gap-1.5 bg-fb-surface-hover p-1 rounded-full w-full sm:w-auto overflow-x-auto">
             <button
-              onClick={() => setPageTab('active')}
-              className={`flex-1 sm:flex-initial px-3.5 sm:px-4 py-1.5 rounded-full text-xs text-center transition-colors ${pageTab === 'active'
+              onClick={() => { setPageTab('active'); setFilterStatus(''); }}
+              className={`flex-1 sm:flex-initial px-3.5 sm:px-4 py-1.5 rounded-full text-xs text-center transition-colors whitespace-nowrap flex items-center justify-center gap-1.5 ${pageTab === 'active'
                 ? 'bg-gradient-to-r from-fb-blue to-cyan-500 text-white font-bold shadow-md shadow-blue-500/20'
                 : 'font-semibold text-fb-text-muted hover:text-fb-text hover:bg-white/5'
                 }`}
             >
-              Đang Hoạt Động ({activePages.length})
+              <span>Đang Hoạt Động</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${pageTab === 'active' ? 'bg-white/20 text-white font-extrabold' : 'bg-slate-800 text-slate-300'}`}>
+                {healthyPages.length}
+              </span>
             </button>
+
             <button
-              onClick={() => setPageTab('deactivated')}
-              className={`flex-1 sm:flex-initial px-3.5 sm:px-4 py-1.5 rounded-full text-xs text-center transition-colors ${pageTab === 'deactivated'
-                ? 'bg-amber-500/20 text-amber-400 font-bold shadow-md'
+              onClick={() => { setPageTab('restricted'); setFilterStatus(''); }}
+              className={`flex-1 sm:flex-initial px-3.5 sm:px-4 py-1.5 rounded-full text-xs text-center transition-colors whitespace-nowrap flex items-center justify-center gap-1.5 ${pageTab === 'restricted'
+                ? 'bg-amber-500/20 text-amber-300 font-bold shadow-md border border-amber-500/40'
+                : 'font-semibold text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/10'
+                }`}
+            >
+              <span className="material-symbols-outlined text-[14px] text-amber-400">warning</span>
+              <span>Bị Chặn / Xác Minh</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${pageTab === 'restricted' ? 'bg-amber-500/30 text-amber-200' : 'bg-amber-500/15 text-amber-400'}`}>
+                {restrictedPages.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => { setPageTab('deactivated'); setFilterStatus(''); }}
+              className={`flex-1 sm:flex-initial px-3.5 sm:px-4 py-1.5 rounded-full text-xs text-center transition-colors whitespace-nowrap flex items-center justify-center gap-1.5 ${pageTab === 'deactivated'
+                ? 'bg-slate-700/70 text-slate-200 font-bold shadow-md'
                 : 'font-semibold text-fb-text-muted hover:text-fb-text hover:bg-white/5'
                 }`}
             >
-              Đã Tắt ({deactivatedPages.length})
+              <span>Đã Tắt</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${pageTab === 'deactivated' ? 'bg-white/20 text-white font-extrabold' : 'bg-slate-800 text-slate-400'}`}>
+                {deactivatedPages.length}
+              </span>
             </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-            <div className="relative flex-1 sm:w-56">
+            <div className="relative flex-1 sm:w-52">
               <span className="material-symbols-outlined absolute left-3 top-2.5 text-fb-text-muted text-sm">search</span>
               <input
                 type="text"
@@ -1079,7 +1144,7 @@ export default function FacebookPages() {
                   { value: '', label: 'Tất cả Doanh Nghiệp (BM)' },
                   ...uniqueBusinesses.map((bName: any) => ({ value: bName, label: bName }))
                 ]}
-                className="flex-1 sm:w-48"
+                className="flex-1 sm:w-44"
               />
             )}
             {uniqueOwners.length > 0 && (
@@ -1090,10 +1155,29 @@ export default function FacebookPages() {
                   { value: '', label: 'Tất cả Nick' },
                   ...uniqueOwners.map((owner: any) => ({ value: owner, label: owner }))
                 ]}
-                className="flex-1 sm:w-40"
+                className="flex-1 sm:w-36"
               />
             )}
-            <button onClick={() => ztteam_fetchPagesFromDB()} disabled={isLoading} className="px-3 py-2 rounded-full bg-fb-surface-hover text-fb-text-muted hover:text-fb-text text-xs font-medium flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors shrink-0">
+            <CustomDropdown
+              value={filterStatus}
+              onChange={(val) => {
+                setFilterStatus(val);
+                if (val === 'checkpoint' || val === 'publish_disabled' || val === 'token_error') {
+                  setPageTab('restricted');
+                } else if (val === 'healthy') {
+                  setPageTab('active');
+                }
+              }}
+              options={[
+                { value: '', label: 'Tất cả Trạng Thái' },
+                { value: 'healthy', label: '🟢 Hoạt động bình thường' },
+                { value: 'checkpoint', label: '⚠️ Cần xác minh (Checkpoint)' },
+                { value: 'publish_disabled', label: '🛑 Bị chặn / Tắt đăng' },
+                { value: 'token_error', label: '🔴 Token hết hạn / Lỗi' },
+              ]}
+              className="flex-1 sm:w-44"
+            />
+            <button onClick={() => ztteam_fetchPagesFromDB()} disabled={isLoading} className="px-3 py-2 rounded-full bg-fb-surface-hover text-fb-text-muted hover:text-fb-text text-xs font-medium flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors shrink-0" title="Tải lại danh sách Fanpage">
               <span className={`material-symbols-outlined text-base shrink-0 ${isLoading ? 'animate-spin' : ''}`}>refresh</span>
             </button>
           </div>
@@ -1185,9 +1269,19 @@ export default function FacebookPages() {
         <div className="p-4 sm:p-5">
           {currentTabPages.length === 0 ? (
             <div className="py-16 text-center text-fb-text-muted">
-              <span className="material-symbols-outlined text-5xl mb-2 opacity-40">inbox</span>
-              <p className="font-bold text-base text-fb-text">Không có Fanpage nào</p>
-              <p className="text-xs text-fb-text-muted mt-1">Fanpage được kết nối sẽ hiển thị tại đây.</p>
+              {pageTab === 'restricted' ? (
+                <>
+                  <span className="material-symbols-outlined text-5xl mb-2 text-emerald-400 opacity-90">verified_user</span>
+                  <p className="font-bold text-base text-emerald-400">Tuyệt vời! Không có Fanpage lỗi hoặc bị chặn</p>
+                  <p className="text-xs text-fb-text-muted mt-1">100% Fanpage đang hoạt động an toàn, không có tài khoản nào cần xác minh.</p>
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-5xl mb-2 opacity-40">inbox</span>
+                  <p className="font-bold text-base text-fb-text">Không có Fanpage nào</p>
+                  <p className="text-xs text-fb-text-muted mt-1">Fanpage phù hợp với bộ lọc sẽ hiển thị tại đây.</p>
+                </>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">

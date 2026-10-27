@@ -41,6 +41,7 @@ export interface ZTTeamFanpage {
   appId?: string | null;
   appName?: string | null;
   tokenExpiry?: string | null;
+  isCheckpointBlocked?: boolean;
 }
 
 interface ZTTeamFacebookState {

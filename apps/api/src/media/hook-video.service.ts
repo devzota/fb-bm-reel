@@ -351,8 +351,8 @@ export class ZTTeamHookVideoService {
 
     let browser: any = null;
     try {
-      /** ZTTeam: Mặc định quy về 1 kiểu duy nhất là Text Story Hook 2.0 */
-      const engine = options?.videoEngine || (imageRecord.page as any)?.video_engine || 'text_story';
+      /** ZTTeam: Khai tử hoàn toàn định dạng hook_image, ép 100% video sang Text Story 3 mẫu mới */
+      const engine = 'text_story';
 
       /** 1. Chuẩn bị ảnh nguồn (đối với hook_image thì bắt buộc, text_story có thể linh hoạt) */
       const localImageCandidates = [
@@ -417,7 +417,18 @@ export class ZTTeamHookVideoService {
         if (fs.existsSync(storyDataFile) && !options?.forceRegenContent) {
           try {
             storyData = JSON.parse(fs.readFileSync(storyDataFile, 'utf-8'));
-            this.logger.log(`[Text Story Reel] Tái sử dụng kịch bản đã lưu sẵn cho bài viết ${imageId} (Không cần gọi lại Gemini API)`);
+            /** ZTTeam: Kiểm tra nếu kịch bản cũ là do fallback cào thô thì bắt buộc hủy bỏ để AI tạo mới */
+            const textCheck = (storyData?.hookQuote || '') + ' ' + (storyData?.paragraphs || []).join(' ');
+            const isFallbackData = textCheck.includes('CONTINUED IN THE COMMENTS') ||
+              textCheck.includes('👇') ||
+              (storyData?.hookQuote && storyData.hookQuote === storyData.hookQuote.toUpperCase() && storyData.hookQuote.length > 20);
+
+            if (isFallbackData) {
+              this.logger.warn(`[Text Story Reel] Kịch bản bài ${imageId} dính bài cào thô. Tự động hủy cache để AI tạo kịch bản mới 100%!`);
+              storyData = null;
+            } else {
+              this.logger.log(`[Text Story Reel] Tái sử dụng kịch bản AI đạt chuẩn cho bài viết ${imageId}`);
+            }
           } catch (readErr: any) {
             storyData = null;
           }

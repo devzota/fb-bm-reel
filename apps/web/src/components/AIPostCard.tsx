@@ -299,9 +299,9 @@ export default function ZTTeamAIPostCard({
         </h3>
       </div>
 
-      {/** 4. Media Container 4:5 */}
+      {/** 4. Media Container (Hiển thị đúng kích thước nguyên bản, không cắt xén, không overlay) */}
       <div className="px-4 py-1">
-        <div className="w-full aspect-[4/5] bg-black/60 rounded-xl relative overflow-hidden group/media border border-white/5">
+        <div className={`w-full ${showVideo ? 'aspect-[9/16]' : 'aspect-[4/5]'} bg-black/90 rounded-xl relative overflow-hidden group/media border border-white/5 transition-all`}>
           {/** Badges Top Bar */}
           <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none gap-1">
             {item.template_id === 'source_original' ? (
@@ -442,23 +442,12 @@ export default function ZTTeamAIPostCard({
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
                 onEnded={() => setIsPlaying(false)}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
               />
-              {/** ZTTeam: Nút Play Overlay khi video chưa phát hoặc đang tạm dừng */}
-              {!isPlaying && (
-                <div
-                  className="absolute inset-0 bg-black/30 backdrop-blur-[1px] flex items-center justify-center transition-all group-hover/video:bg-black/40"
-                  title="Bấm để phát video"
-                >
-                  <div className="w-13 h-13 rounded-full bg-black/70 hover:bg-black/90 border border-amber-400/60 text-amber-300 hover:text-white flex items-center justify-center shadow-2xl hover:scale-110 transition-transform cursor-pointer">
-                    <span className="material-symbols-outlined text-3xl ml-0.5 select-none">play_arrow</span>
-                  </div>
-                </div>
-              )}
             </div>
           ) : item.image_url ? (
             <div
-              className="w-full h-full cursor-pointer overflow-hidden relative"
+              className="w-full h-full cursor-pointer overflow-hidden relative flex items-center justify-center bg-black/90"
               onClick={() => {
                 if (onZoom) {
                   onZoom(item.image_url);
@@ -471,7 +460,7 @@ export default function ZTTeamAIPostCard({
               <img
                 src={item.image_url}
                 alt={item.wp_post_title || '2K Image'}
-                className="w-full h-full object-cover group-hover/media:scale-105 transition-transform duration-500"
+                className="w-full h-full object-contain"
                 onError={(e: any) => {
                   e.target.onerror = null;
                   e.target.src =
@@ -485,11 +474,6 @@ export default function ZTTeamAIPostCard({
                   <span className="truncate flex-1 font-medium">{item.error_log || 'Lỗi xuất bản Facebook'}</span>
                 </div>
               )}
-              <div className="absolute inset-0 bg-black/0 group-hover/media:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover/media:opacity-100">
-                <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur-md text-white flex items-center justify-center">
-                  <span className="material-symbols-outlined text-xl">zoom_in</span>
-                </div>
-              </div>
             </div>
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center text-fb-text-muted text-xs">
