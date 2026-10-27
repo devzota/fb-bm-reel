@@ -44,6 +44,17 @@ export class ZTTeamReelViralMonitorCron {
     private readonly httpService: HttpService,
   ) {}
 
+  onApplicationBootstrap() {
+    if (process.env.ENABLE_AUTO_CRON === 'false') {
+      return;
+    }
+    /** Khởi chạy lượt quét ban đầu sau 25 giây khi server khởi động */
+    setTimeout(() => {
+      this.logger.log('[Viral Monitor] Kích hoạt lượt quét Views ban đầu sau khi server khởi động...');
+      this.ztteam_handleViralCron();
+    }, 25000);
+  }
+
   /**
    * ZTTeam: Cron định kỳ quét mốc Views của các Video Reel
    * Chu kỳ: Mỗi 15 phút
